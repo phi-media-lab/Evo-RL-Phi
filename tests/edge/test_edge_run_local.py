@@ -8,6 +8,7 @@ from pathlib import Path
 from lerobot.control_plane import ArtifactManifest, ReleaseRegistry
 from lerobot.edge.mock_runtime import StaticActionRuntimeConfig
 from lerobot.scripts.edge_run_local import EdgeRunLocalConfig, run_edge_local
+from tests.edge.test_http_ingestion import _start_ingestion_server
 from tests.mocks.mock_robot import MockRobotConfig
 
 
@@ -48,6 +49,47 @@ def test_run_edge_local_dry_run_with_upload(tmp_path):
     with (uploaded_episode_dir / "upload_receipt.json").open("r", encoding="utf-8") as handle:
         saved_receipt = json.load(handle)
     assert saved_receipt["episode_id"] == result.episode_id
+
+
+def test_run_edge_local_dry_run_with_http_upload(tmp_path):
+    server, thread = _start_ingestion_server(tmp_path)
+    try:
+        cfg = EdgeRunLocalConfig(
+            robot=MockRobotConfig(
+                n_motors=3,
+                random_values=False,
+                static_values=[1.0, 2.0, 3.0],
+            ),
+            runtime=StaticActionRuntimeConfig(
+                action_dim=3,
+                actions_per_chunk=2,
+                action_value=0.75,
+            ),
+            spool_root=str(tmp_path / "spool"),
+            model_store_root=str(tmp_path / "models"),
+            ingestion_base_url=f"http://127.0.0.1:{server.server_port}",
+            max_steps=3,
+            fps=20,
+            dry_run=True,
+            upload_after_run=True,
+            upload_steps_per_chunk=2,
+        )
+
+        result = run_edge_local(cfg)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert result.step_count == 3
+    assert result.uploaded is True
+    assert result.upload_receipt is not None
+    assert result.upload_receipt["expected_chunk_count"] == 2
+
+    uploaded_episode_dir = tmp_path / "spool" / "uploaded" / result.episode_id
+    sink_episode_dir = tmp_path / "ingestion" / result.episode_id
+    assert uploaded_episode_dir.exists()
+    assert (sink_episode_dir / "commit.json").exists()
 
 
 def _write_artifact(root: Path, artifact_id: str) -> None:

@@ -56,6 +56,7 @@ class EdgeRunLocalConfig:
     dry_run_action_value: float = 0.0
     upload_after_run: bool = False
     ingestion_store_root: str = ".edge_ingestion"
+    ingestion_base_url: str | None = None
     incident_store_root: str | None = ".edge_incidents"
     upload_steps_per_chunk: int = 64
     runtime_contract: EdgeRuntimeContract = field(default_factory=default_edge_runtime_contract)
@@ -69,6 +70,8 @@ class EdgeRunLocalConfig:
             raise ValueError("num_episodes must be positive.")
         if self.upload_steps_per_chunk <= 0:
             raise ValueError("upload_steps_per_chunk must be positive.")
+        if self.ingestion_base_url is not None and not self.ingestion_base_url:
+            raise ValueError("ingestion_base_url cannot be empty.")
         if self.device_id is not None and not self.device_id:
             raise ValueError("device_id cannot be empty.")
         if self.registry_root is not None and not self.registry_root:
@@ -134,6 +137,7 @@ def run_edge_local(
                 upload_after_run=cfg.upload_after_run,
                 upload_steps_per_chunk=cfg.upload_steps_per_chunk,
                 ingestion_store_root=cfg.ingestion_store_root,
+                ingestion_base_url=cfg.ingestion_base_url,
                 incident_store_root=cfg.incident_store_root,
                 device_id=cfg.device_id,
             ),

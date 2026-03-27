@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from lerobot.cloud.ingestion import FilesystemEpisodeIngestionStore
+from lerobot.cloud.ingestion import FilesystemEpisodeIngestionStore, HTTPEpisodeIngestionClient
 from lerobot.control_plane.registry import ReleaseRegistry
 from lerobot.edge.contracts import EdgeRuntimeContract
 from lerobot.envs.configs import HILSerlRobotEnvConfig
@@ -36,6 +36,7 @@ class EdgeDeploymentLoopConfig:
     upload_after_run: bool
     upload_steps_per_chunk: int
     ingestion_store_root: str
+    ingestion_base_url: str | None = None
     incident_store_root: str | None = None
     device_id: str | None = None
 
@@ -162,7 +163,7 @@ class EdgeDeploymentLoop:
             if self.loop_cfg.upload_after_run:
                 uploader = EdgeEpisodeUploader(
                     spool=self.spool,
-                    sink=FilesystemEpisodeIngestionStore(Path(self.loop_cfg.ingestion_store_root)),
+                    sink=self._make_ingestion_sink(),
                     config=EdgeUploaderConfig(steps_per_chunk=self.loop_cfg.upload_steps_per_chunk),
                 )
                 upload_receipt = uploader.upload_episode(result.episode_id)
@@ -181,6 +182,11 @@ class EdgeDeploymentLoop:
             rollback_actions=rollback_actions,
             upload_receipt=upload_receipt,
         )
+
+    def _make_ingestion_sink(self) -> Any:
+        if self.loop_cfg.ingestion_base_url is not None:
+            return HTTPEpisodeIngestionClient(self.loop_cfg.ingestion_base_url)
+        return FilesystemEpisodeIngestionStore(Path(self.loop_cfg.ingestion_store_root))
 
     def _build_action_processor(self) -> Any | None:
         if not self.loop_cfg.use_action_processor:
