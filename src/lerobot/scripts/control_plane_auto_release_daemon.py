@@ -31,6 +31,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device-state-root", action="append", default=[], dest="device_state_roots")
     parser.add_argument("--policy-type", default="act")
     parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--materializer-base-url")
+    parser.add_argument("--materializer-repo-id", default="local/edge-materialized")
+    parser.add_argument("--materializer-fps", type=int, default=20)
+    parser.add_argument("--materializer-use-videos", action="store_true")
+    parser.add_argument("--materializer-no-env-state-alias", action="store_true")
     parser.add_argument("--poll-interval-s", type=float, default=5.0)
     parser.add_argument("--max-iterations", type=int)
     return parser
@@ -65,6 +70,11 @@ def run_auto_release_daemon(
     device_state_roots: dict[str, str] | None = None,
     policy_type: str = "act",
     batch_size: int = 1,
+    materializer_base_url: str | None = None,
+    materializer_repo_id: str = "local/edge-materialized",
+    materializer_fps: int = 20,
+    materializer_use_videos: bool = False,
+    materializer_include_env_state_alias: bool = True,
     poll_interval_s: float = 5.0,
     max_iterations: int | None = None,
 ) -> str:
@@ -91,6 +101,11 @@ def run_auto_release_daemon(
         device_state_roots=device_state_roots,
         policy_type=policy_type,
         batch_size=batch_size,
+        materializer_base_url=materializer_base_url,
+        materializer_repo_id=materializer_repo_id,
+        materializer_fps=materializer_fps,
+        materializer_use_videos=materializer_use_videos,
+        materializer_include_env_state_alias=materializer_include_env_state_alias,
         poll_interval_s=poll_interval_s,
         max_iterations=max_iterations,
     )
@@ -132,6 +147,11 @@ def main() -> None:
         device_state_roots=_parse_device_state_roots(args.device_state_roots),
         policy_type=args.policy_type,
         batch_size=args.batch_size,
+        materializer_base_url=args.materializer_base_url,
+        materializer_repo_id=args.materializer_repo_id,
+        materializer_fps=args.materializer_fps,
+        materializer_use_videos=args.materializer_use_videos,
+        materializer_include_env_state_alias=not args.materializer_no_env_state_alias,
         poll_interval_s=args.poll_interval_s,
         max_iterations=args.max_iterations,
     )

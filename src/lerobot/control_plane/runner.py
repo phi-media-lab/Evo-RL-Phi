@@ -11,7 +11,11 @@ from pathlib import Path
 import time
 from typing import Any
 
-from lerobot.cloud.materializer import MaterializedDatasetManifest, MaterializedEpisodeSummary
+from lerobot.cloud.materializer import (
+    HTTPMaterializerClient,
+    MaterializedDatasetManifest,
+    MaterializedEpisodeSummary,
+)
 
 from .controller import ReleaseController
 from .registry import ReleaseRegistry
@@ -282,6 +286,11 @@ class AutoReleaseDaemon:
         device_state_roots: dict[str, str] | None = None,
         policy_type: str = "act",
         batch_size: int = 1,
+        materializer_base_url: str | None = None,
+        materializer_repo_id: str = "local/edge-materialized",
+        materializer_fps: int = 20,
+        materializer_use_videos: bool = False,
+        materializer_include_env_state_alias: bool = True,
         poll_interval_s: float = 5.0,
         max_iterations: int | None = None,
         sleep_fn: Any = time.sleep,
@@ -304,6 +313,11 @@ class AutoReleaseDaemon:
                 device_state_roots=device_state_roots,
                 policy_type=policy_type,
                 batch_size=batch_size,
+                materializer_base_url=materializer_base_url,
+                materializer_repo_id=materializer_repo_id,
+                materializer_fps=materializer_fps,
+                materializer_use_videos=materializer_use_videos,
+                materializer_include_env_state_alias=materializer_include_env_state_alias,
             )
             results.append(result)
             self._append_history(result)
@@ -344,9 +358,22 @@ class AutoReleaseDaemon:
         device_state_roots: dict[str, str] | None,
         policy_type: str,
         batch_size: int,
+        materializer_base_url: str | None,
+        materializer_repo_id: str,
+        materializer_fps: int,
+        materializer_use_videos: bool,
+        materializer_include_env_state_alias: bool,
     ) -> ControllerRunResult:
         started_at = self._utc_now()
         started_perf = time.perf_counter()
+        if materializer_base_url is not None:
+            HTTPMaterializerClient(materializer_base_url).materialize(
+                repo_id=materializer_repo_id,
+                fps=materializer_fps,
+                export_lerobot_dataset=True,
+                use_videos=materializer_use_videos,
+                include_env_state_alias=materializer_include_env_state_alias,
+            )
         manifest_path = Path(materialized_root) / "manifest.json"
         if not manifest_path.exists():
             return ControllerRunResult(
