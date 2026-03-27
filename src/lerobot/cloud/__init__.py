@@ -10,8 +10,10 @@ from .ingestion import (
 from .artifact_builder import ArtifactBuildRequest, FilesystemArtifactBuilder
 from .materializer import (
     FilesystemEpisodeMaterializer,
+    HTTPMaterializerClient,
     MaterializedDatasetManifest,
     MaterializedEpisodeSummary,
+    MaterializerHTTPServer,
 )
 
 __all__ = [
@@ -23,6 +25,8 @@ __all__ = [
     "ArtifactBuildRequest",
     "FilesystemArtifactBuilder",
     "FilesystemEpisodeMaterializer",
+    "HTTPMaterializerClient",
     "MaterializedDatasetManifest",
     "MaterializedEpisodeSummary",
+    "MaterializerHTTPServer",
 ]

@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass, field
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib import request as urllib_request
 
 import numpy as np
 
@@ -372,3 +375,103 @@ class FilesystemEpisodeMaterializer:
     def _read_json(self, path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as handle:
             return json.load(handle)
+
+
+class HTTPMaterializerClient:
+    """Thin HTTP client for triggering remote materialization jobs."""
+
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
+
+    def materialize(
+        self,
+        *,
+        repo_id: str = "local/edge-materialized",
+        fps: int = 20,
+        export_lerobot_dataset: bool = False,
+        use_videos: bool = False,
+        include_env_state_alias: bool = True,
+    ) -> dict[str, Any]:
+        payload = {
+            "repo_id": repo_id,
+            "fps": fps,
+            "export_lerobot_dataset": export_lerobot_dataset,
+            "use_videos": use_videos,
+            "include_env_state_alias": include_env_state_alias,
+        }
+        response = urllib_request.urlopen(
+            urllib_request.Request(
+                url=f"{self.base_url}/materialize",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+        )
+        with response:
+            return json.loads(response.read().decode("utf-8"))
+
+
+class MaterializerHTTPRequestHandler(BaseHTTPRequestHandler):
+    server: "MaterializerHTTPServer"
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path != "/materialize":
+            self._write_json(HTTPStatus.NOT_FOUND, {"error": f"Unsupported path: {self.path}"})
+            return
+
+        content_length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(content_length).decode("utf-8") or "{}")
+        manifest = self.server.materialize(payload)
+        self._write_json(
+            HTTPStatus.OK,
+            {
+                "status": "materialized",
+                "manifest": manifest.to_dict(),
+            },
+        )
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def _write_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
+        body = json.dumps(payload, sort_keys=True).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class MaterializerHTTPServer(ThreadingHTTPServer):
+    """Threaded HTTP server that exposes FilesystemEpisodeMaterializer over HTTP."""
+
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        *,
+        ingestion_root: str | Path,
+        output_root: str | Path,
+        dataset_root: str | Path | None = None,
+    ):
+        self.ingestion_root = Path(ingestion_root)
+        self.output_root = Path(output_root)
+        self.dataset_root = Path(dataset_root) if dataset_root is not None else None
+        super().__init__(server_address, MaterializerHTTPRequestHandler)
+
+    def materialize(self, payload: dict[str, Any]) -> MaterializedDatasetManifest:
+        materializer = FilesystemEpisodeMaterializer(
+            ingestion_root=self.ingestion_root,
+            output_root=self.output_root,
+        )
+        export_lerobot_dataset = bool(payload.get("export_lerobot_dataset", False))
+        if export_lerobot_dataset:
+            if self.dataset_root is None:
+                raise ValueError("Server was started without dataset_root but export_lerobot_dataset was requested.")
+            return materializer.materialize_to_lerobot_dataset(
+                repo_id=str(payload.get("repo_id", "local/edge-materialized")),
+                dataset_root=self.dataset_root,
+                fps=int(payload.get("fps", 20)),
+                use_videos=bool(payload.get("use_videos", False)),
+                include_env_state_alias=bool(payload.get("include_env_state_alias", True)),
+            )
+        return materializer.materialize_all()
