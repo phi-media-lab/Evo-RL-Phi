@@ -12,7 +12,8 @@ from lerobot.edge.runner import EdgeRobotRunner
 from lerobot.edge.spool import EdgeEpisodeSpool
 from lerobot.edge.uploader import EdgeEpisodeUploader, EdgeUploaderConfig
 from lerobot.robots.utils import make_robot_from_config
-from lerobot.utils.constants import ACTION, DONE, OBS_STATE, REWARD
+from lerobot.scripts.cloud_train_smoke import run_training_smoke
+from lerobot.utils.constants import ACTION, DONE, OBS_ENV_STATE, OBS_STATE, REWARD
 from tests.mocks.mock_robot import MockRobotConfig
 
 
@@ -110,6 +111,32 @@ def test_materializer_exports_local_lerobot_dataset(tmp_path):
     assert DONE in sample
     assert sample[ACTION].shape[0] == 3
     assert sample[OBS_STATE].shape[0] == 3
+    assert sample[OBS_ENV_STATE].shape[0] == 3
     assert sample["task"] == "materialize-task"
     assert bool(sample[DONE].item()) is False
     assert float(sample[REWARD].item()) == 0.0
+
+
+def test_materialized_lerobot_dataset_supports_one_step_training_smoke(tmp_path):
+    _build_committed_episode(tmp_path)
+
+    materializer = FilesystemEpisodeMaterializer(
+        ingestion_root=tmp_path / "ingestion",
+        output_root=tmp_path / "materialized",
+    )
+    materializer.materialize_to_lerobot_dataset(
+        repo_id="local/mock-edge-train",
+        dataset_root=tmp_path / "lerobot_dataset",
+        fps=20,
+    )
+
+    result = run_training_smoke(
+        dataset_root=str(tmp_path / "lerobot_dataset"),
+        repo_id="local/mock-edge-train",
+        output_dir=str(tmp_path / "train_out"),
+    )
+
+    assert result["policy_type"] == "act"
+    assert result["dataset_num_episodes"] == 1
+    assert result["dataset_num_frames"] == 3
+    assert result["loss"] >= 0.0

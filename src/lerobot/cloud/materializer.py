@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.utils.constants import ACTION, DONE, OBS_IMAGES, OBS_STATE, REWARD
+from lerobot.utils.constants import ACTION, DONE, OBS_ENV_STATE, OBS_IMAGES, OBS_STATE, REWARD
 
 
 def _sanitize_feature_name(value: str) -> str:
@@ -43,7 +43,11 @@ def _flatten_numeric_dict(prefix: str, payload: dict[str, Any]) -> list[tuple[st
     return flattened
 
 
-def _infer_lerobot_features(step: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], list[str], list[str]]:
+def _infer_lerobot_features(
+    step: dict[str, Any],
+    *,
+    include_env_state_alias: bool,
+) -> tuple[dict[str, dict[str, Any]], list[str], list[str]]:
     observation = step.get("observation") or {}
     action = step.get("action")
 
@@ -110,6 +114,12 @@ def _infer_lerobot_features(step: dict[str, Any]) -> tuple[dict[str, dict[str, A
         "complementary_info.done_local": {"dtype": "bool", "shape": (1,), "names": None},
         "complementary_info.teleop_override": {"dtype": "bool", "shape": (1,), "names": None},
     }
+    if include_env_state_alias:
+        features[OBS_ENV_STATE] = {
+            "dtype": "float32",
+            "shape": (int(sum(part.size for part in state_parts)),),
+            "names": list(state_names),
+        }
     features.update(image_features)
     return features, state_names, action_names
 
@@ -120,6 +130,7 @@ def _step_to_lerobot_frame(
     state_names: list[str],
     action_names: list[str],
     task: str,
+    include_env_state_alias: bool,
 ) -> dict[str, Any]:
     observation = step.get("observation") or {}
     action = step.get("action")
@@ -143,7 +154,10 @@ def _step_to_lerobot_frame(
     if flattened_state_names != state_names:
         raise ValueError("Observation schema drift detected while materializing episodes.")
 
-    frame[OBS_STATE] = np.concatenate(state_values).astype(np.float32)
+    state_vector = np.concatenate(state_values).astype(np.float32)
+    frame[OBS_STATE] = state_vector
+    if include_env_state_alias:
+        frame[OBS_ENV_STATE] = state_vector.copy()
 
     if isinstance(action, dict):
         action_parts = _flatten_numeric_dict("", action)
@@ -239,6 +253,7 @@ class FilesystemEpisodeMaterializer:
         dataset_root: str | Path,
         fps: int,
         use_videos: bool = False,
+        include_env_state_alias: bool = True,
     ) -> MaterializedDatasetManifest:
         episode_dirs = sorted(path for path in self.ingestion_root.iterdir() if path.is_dir())
         if not episode_dirs:
@@ -248,7 +263,10 @@ class FilesystemEpisodeMaterializer:
         if not first_steps:
             raise ValueError(f"Episode '{episode_dirs[0].name}' has no steps to materialize.")
 
-        features, state_names, action_names = _infer_lerobot_features(first_steps[0])
+        features, state_names, action_names = _infer_lerobot_features(
+            first_steps[0],
+            include_env_state_alias=include_env_state_alias,
+        )
         dataset_root = Path(dataset_root)
         dataset = LeRobotDataset.create(
             repo_id=repo_id,
@@ -272,6 +290,7 @@ class FilesystemEpisodeMaterializer:
                         state_names=state_names,
                         action_names=action_names,
                         task=str(meta_payload["task_id"]),
+                        include_env_state_alias=include_env_state_alias,
                     )
                 )
             dataset.save_episode(
