@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib import request
 
 
 def _utcnow() -> str:
@@ -105,3 +108,105 @@ class FilesystemEpisodeIngestionStore:
         with path.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True)
             handle.write("\n")
+
+
+class HTTPEpisodeIngestionClient:
+    """HTTP client that talks to the minimal ingestion service."""
+
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
+
+    def upload_chunk(self, chunk: EpisodeChunk, payload: str) -> dict[str, Any]:
+        return self._post_json(
+            "/chunks",
+            {
+                "chunk": chunk.to_dict(),
+                "payload": payload,
+            },
+        )
+
+    def commit_episode(
+        self,
+        request_payload: EpisodeCommitRequest,
+        *,
+        episode_meta: dict[str, Any],
+        episode_summary: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self._post_json(
+            "/commit",
+            {
+                "request": request_payload.to_dict(),
+                "episode_meta": episode_meta,
+                "episode_summary": episode_summary,
+            },
+        )
+
+    def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        body = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            url=f"{self.base_url}{path}",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with request.urlopen(req) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+
+class EpisodeIngestionHTTPRequestHandler(BaseHTTPRequestHandler):
+    """Request handler for the minimal ingestion service."""
+
+    store: FilesystemEpisodeIngestionStore
+
+    def do_POST(self) -> None:  # noqa: N802
+        content_length = int(self.headers.get("Content-Length", "0"))
+        raw_body = self.rfile.read(content_length)
+        payload = json.loads(raw_body.decode("utf-8"))
+
+        if self.path == "/chunks":
+            chunk = EpisodeChunk(**payload["chunk"])
+            payload_path = self.store.upload_chunk(chunk, payload["payload"])
+            self._write_json(
+                HTTPStatus.OK,
+                {
+                    "episode_id": chunk.episode_id,
+                    "chunk_index": chunk.chunk_index,
+                    "payload_path": str(payload_path),
+                },
+            )
+            return
+
+        if self.path == "/commit":
+            commit = EpisodeCommitRequest(**payload["request"])
+            receipt = self.store.commit_episode(
+                commit,
+                episode_meta=payload["episode_meta"],
+                episode_summary=payload.get("episode_summary"),
+            )
+            self._write_json(HTTPStatus.OK, receipt)
+            return
+
+        self._write_json(HTTPStatus.NOT_FOUND, {"error": f"unknown path: {self.path}"})
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def _write_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
+        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+
+class EpisodeIngestionHTTPServer(ThreadingHTTPServer):
+    """Threaded HTTP server that exposes FilesystemEpisodeIngestionStore over HTTP."""
+
+    def __init__(self, server_address: tuple[str, int], store: FilesystemEpisodeIngestionStore):
+        handler_cls = type(
+            "BoundEpisodeIngestionHTTPRequestHandler",
+            (EpisodeIngestionHTTPRequestHandler,),
+            {"store": store},
+        )
+        super().__init__(server_address, handler_cls)

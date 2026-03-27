@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from lerobot.cloud.ingestion import EpisodeChunk, EpisodeCommitRequest, FilesystemEpisodeIngestionStore
+from lerobot.cloud.ingestion import EpisodeChunk, EpisodeCommitRequest
 from lerobot.control_plane.artifact import compute_sha256, compute_sha256_bytes
 
 from .spool import EdgeEpisodeSpool
@@ -31,7 +31,7 @@ class EdgeEpisodeUploader:
         self,
         *,
         spool: EdgeEpisodeSpool,
-        sink: FilesystemEpisodeIngestionStore,
+        sink: Any,
         config: EdgeUploaderConfig | None = None,
     ):
         self.spool = spool
