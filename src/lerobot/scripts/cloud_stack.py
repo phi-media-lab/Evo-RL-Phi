@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import threading
+import time
 from dataclasses import asdict, dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 
 from lerobot.cloud.ingestion import EpisodeIngestionHTTPServer, FilesystemEpisodeIngestionStore
 from lerobot.cloud.materializer import MaterializerHTTPServer
@@ -149,6 +151,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--materializer-no-env-state-alias", action="store_true")
     parser.add_argument("--poll-interval-s", type=float, default=5.0)
     parser.add_argument("--max-iterations", type=int)
+    parser.add_argument("--keep-alive", action="store_true")
+    parser.add_argument("--idle-sleep-s", type=float, default=1.0)
     return parser
 
 
@@ -193,6 +197,10 @@ def run_cloud_stack(
     materializer_include_env_state_alias: bool = True,
     poll_interval_s: float = 5.0,
     max_iterations: int | None = None,
+    keep_alive: bool = False,
+    idle_sleep_s: float = 1.0,
+    stop_event: threading.Event | None = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> str:
     runtime_root_path = Path(runtime_root)
     runtime_root_path.mkdir(parents=True, exist_ok=True)
@@ -258,6 +266,12 @@ def run_cloud_stack(
             status.metrics_path = str(metrics_path)
         status.phase = "completed"
         _write_status(runtime_root_path, status)
+        if keep_alive:
+            status.phase = "serving"
+            _write_status(runtime_root_path, status)
+            guard = stop_event or threading.Event()
+            while not guard.is_set():
+                sleep_fn(idle_sleep_s)
         return output
     except Exception as exc:
         status.phase = "failed"
@@ -311,6 +325,8 @@ def main() -> None:
         materializer_include_env_state_alias=not args.materializer_no_env_state_alias,
         poll_interval_s=args.poll_interval_s,
         max_iterations=args.max_iterations,
+        keep_alive=args.keep_alive,
+        idle_sleep_s=args.idle_sleep_s,
     )
     print(output)
 

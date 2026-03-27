@@ -30,6 +30,8 @@ CAMERA_LAYOUT="${CAMERA_LAYOUT:-single_arm_mock}"
 POLL_INTERVAL_S="${POLL_INTERVAL_S:-5}"
 MAX_ITERATIONS="${MAX_ITERATIONS:-}"
 ROLLOUT_REASON="${ROLLOUT_REASON:-cloud stack release}"
+KEEP_ALIVE="${KEEP_ALIVE:-1}"
+IDLE_SLEEP_S="${IDLE_SLEEP_S:-1}"
 
 if ! command -v tmux >/dev/null 2>&1; then
   echo "[cloud-stack-tmux] tmux not found"
@@ -63,9 +65,14 @@ python -m lerobot.scripts.cloud_stack \
   --camera-layout "$CAMERA_LAYOUT" \
   --rollout-reason "$ROLLOUT_REASON" \
   --poll-interval-s "$POLL_INTERVAL_S" \
+  --idle-sleep-s "$IDLE_SLEEP_S" \
   ${MAX_ITERATIONS:+--max-iterations "$MAX_ITERATIONS"}
 EOF
 )
+
+if [ "$KEEP_ALIVE" = "1" ]; then
+  STACK_CMD="$STACK_CMD --keep-alive"
+fi
 
 case "$ACTION" in
   start)

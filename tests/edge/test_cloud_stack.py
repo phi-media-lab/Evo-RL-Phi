@@ -120,3 +120,61 @@ def test_cloud_stack_status_server_reports_health_and_status(tmp_path):
     assert health_payload["ok"] is True
     assert runtime_payload["phase"] in {"running", "completed"}
     assert runtime_payload["endpoints"]["ingestion_base_url"].startswith("http://127.0.0.1:")
+
+
+def test_cloud_stack_keep_alive_preserves_status_endpoint_after_release(tmp_path):
+    _build_committed_episode(tmp_path)
+
+    stop_event = threading.Event()
+    container: dict[str, str] = {}
+
+    def _run_stack() -> None:
+        container["output"] = run_cloud_stack(
+            host="127.0.0.1",
+            ingestion_port=0,
+            materializer_port=0,
+            status_port=0,
+            ingestion_root=str(tmp_path / "ingestion"),
+            materialized_root=str(tmp_path / "materialized"),
+            dataset_root=str(tmp_path / "dataset"),
+            train_output_root=str(tmp_path / "train_runs"),
+            artifact_output_root=str(tmp_path / "artifacts"),
+            registry_root=str(tmp_path / "registry"),
+            state_root=str(tmp_path / "controller_state"),
+            runtime_root=str(tmp_path / "controller_runtime"),
+            incident_root=str(tmp_path / "incidents"),
+            report_root=str(tmp_path / "reports"),
+            channel="staging",
+            artifact_prefix="artifact-cloud-stack",
+            compatible_robot_types=["mock_robot"],
+            compatible_camera_layouts=["single_arm_mock"],
+            rollout_reason="cloud stack release",
+            poll_interval_s=0.0,
+            max_iterations=1,
+            keep_alive=True,
+            idle_sleep_s=0.05,
+            stop_event=stop_event,
+        )
+
+    thread = threading.Thread(target=_run_stack, daemon=True)
+    thread.start()
+
+    status_path = tmp_path / "controller_runtime" / "cloud_stack_status.json"
+    latest_path = tmp_path / "controller_runtime" / "latest.json"
+    for _ in range(200):
+        if status_path.exists() and latest_path.exists():
+            break
+        thread.join(timeout=0.05)
+
+    status_payload = json.loads(status_path.read_text(encoding="utf-8"))
+    status_base_url = status_payload["endpoints"]["status_base_url"]
+    with urllib_request.urlopen(f"{status_base_url}/status") as response:
+        runtime_payload = json.loads(response.read().decode("utf-8"))
+
+    assert thread.is_alive()
+    assert runtime_payload["phase"] == "serving"
+    assert runtime_payload["latest_action"] == "released"
+
+    stop_event.set()
+    thread.join(timeout=10)
+    assert not thread.is_alive()
