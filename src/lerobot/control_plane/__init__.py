@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from .artifact import ARTIFACT_MANIFEST_SCHEMA_VERSION, ArtifactManifest, compute_sha256
+from .controller import ChannelPublishResult, ReleaseController
 from .incidents import IncidentAggregationReport, IncidentAggregator
 from .registry import ReleaseRegistry
 from .release import ArtifactStatus, DeviceChannelAssignment, ReleaseChannelState
@@ -10,9 +11,11 @@ __all__ = [
     "ARTIFACT_MANIFEST_SCHEMA_VERSION",
     "ArtifactManifest",
     "ArtifactStatus",
+    "ChannelPublishResult",
     "DeviceChannelAssignment",
     "IncidentAggregationReport",
     "IncidentAggregator",
+    "ReleaseController",
     "ReleaseRegistry",
     "ReleaseChannelState",
     "RolloutStatusBuilder",
