@@ -1,0 +1,28 @@
+[Unit]
+Description=Evo-RL Control Plane Auto Release Daemon
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/workspace/Evo-RL
+Environment=WORKSPACE_ROOT=/workspace
+Environment=ENV_NAME=lerobot
+Environment=MATERIALIZED_ROOT=/workspace/data/materialized
+Environment=TRAIN_OUTPUT_ROOT=/workspace/outputs/train
+Environment=ARTIFACT_OUTPUT_ROOT=/workspace/artifacts
+Environment=REGISTRY_ROOT=/workspace/data/registry
+Environment=STATE_ROOT=/workspace/data/controller_state
+Environment=RUNTIME_ROOT=/workspace/logs/control_plane_auto_release
+Environment=INCIDENT_ROOT=/workspace/data/incidents
+Environment=REPORT_ROOT=/workspace/data/reports
+Environment=CHANNEL=staging
+Environment=ARTIFACT_PREFIX=artifact-auto-release
+Environment=ROBOT_TYPE=mock_robot
+Environment=CAMERA_LAYOUT=single_arm_mock
+Environment=POLL_INTERVAL_S=5
+ExecStart=/bin/bash -lc 'if [ -f "$WORKSPACE_ROOT/runpod_env.sh" ]; then source "$WORKSPACE_ROOT/runpod_env.sh"; fi && source "$(conda info --base)/etc/profile.d/conda.sh" && conda activate "$ENV_NAME" && python -m lerobot.scripts.control_plane_auto_release_daemon --materialized-root "$MATERIALIZED_ROOT" --train-output-root "$TRAIN_OUTPUT_ROOT" --artifact-output-root "$ARTIFACT_OUTPUT_ROOT" --registry-root "$REGISTRY_ROOT" --state-root "$STATE_ROOT" --runtime-root "$RUNTIME_ROOT" --incident-root "$INCIDENT_ROOT" --report-root "$REPORT_ROOT" --channel "$CHANNEL" --artifact-prefix "$ARTIFACT_PREFIX" --robot-type "$ROBOT_TYPE" --camera-layout "$CAMERA_LAYOUT" --poll-interval-s "$POLL_INTERVAL_S"'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

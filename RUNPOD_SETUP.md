@@ -222,6 +222,34 @@ python -m lerobot.scripts.control_plane_auto_release_daemon \
 - `/workspace/logs/control_plane_auto_release/latest.json`
 - `/workspace/logs/control_plane_auto_release/metrics.json`
 
+如果你不想手敲长命令，仓库里已经带了 `tmux` 包装脚本：
+
+```bash
+cd /workspace/Evo-RL
+chmod +x scripts/control_plane_auto_release_tmux.sh
+SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh start
+SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh status
+SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh logs
+```
+
+停止方式：
+
+```bash
+SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh stop
+```
+
+如果你所在环境支持 `systemd`，仓库也附带了 unit 模板：
+
+```bash
+sudo cp scripts/control_plane_auto_release.service /etc/systemd/system/evorl-auto-release.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now evorl-auto-release.service
+sudo systemctl status evorl-auto-release.service
+```
+- `/workspace/logs/control_plane_auto_release/history.jsonl`
+- `/workspace/logs/control_plane_auto_release/latest.json`
+- `/workspace/logs/control_plane_auto_release/metrics.json`
+
 ## 9. 当前阶段推荐先做什么
 
 Runpod 环境就绪后，优先顺序建议是：
