@@ -6,6 +6,7 @@ import json
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
+import time
 from typing import Any
 
 from lerobot.cloud.materializer import MaterializedDatasetManifest, MaterializedEpisodeSummary
@@ -36,6 +37,22 @@ class ControllerRunState:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class ControllerLoopResult:
+    iterations: int
+    results: list[ControllerRunResult]
+    history_path: str
+    latest_path: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "iterations": self.iterations,
+            "results": [result.to_dict() for result in self.results],
+            "history_path": self.history_path,
+            "latest_path": self.latest_path,
+        }
 
 
 class AutoReleaseController:
@@ -205,4 +222,132 @@ class AutoReleaseController:
     def _write_state(self, path: Path, state: ControllerRunState) -> None:
         with path.open("w", encoding="utf-8") as handle:
             json.dump(state.to_dict(), handle, indent=2, sort_keys=True)
+            handle.write("\n")
+
+
+class AutoReleaseDaemon:
+    """Polling wrapper around AutoReleaseController for long-running control-plane automation."""
+
+    def __init__(
+        self,
+        *,
+        registry_root: str | Path,
+        artifact_output_root: str | Path,
+        state_root: str | Path,
+        runtime_root: str | Path,
+    ):
+        self.controller = AutoReleaseController(
+            registry_root=registry_root,
+            artifact_output_root=artifact_output_root,
+            state_root=state_root,
+        )
+        self.runtime_root = Path(runtime_root)
+        self.runtime_root.mkdir(parents=True, exist_ok=True)
+
+    def run(
+        self,
+        *,
+        materialized_root: str | Path,
+        train_output_root: str | Path,
+        incident_root: str | Path,
+        report_root: str | Path,
+        channel: str,
+        artifact_prefix: str,
+        compatible_robot_types: list[str],
+        compatible_camera_layouts: list[str],
+        rollout_reason: str | None = None,
+        report_filename: str = "rollout_status.json",
+        device_state_roots: dict[str, str] | None = None,
+        policy_type: str = "act",
+        batch_size: int = 1,
+        poll_interval_s: float = 5.0,
+        max_iterations: int | None = None,
+        sleep_fn: Any = time.sleep,
+    ) -> ControllerLoopResult:
+        results: list[ControllerRunResult] = []
+        iteration = 0
+        while max_iterations is None or iteration < max_iterations:
+            iteration += 1
+            result = self._run_iteration(
+                materialized_root=materialized_root,
+                train_output_root=train_output_root,
+                incident_root=incident_root,
+                report_root=report_root,
+                channel=channel,
+                artifact_prefix=artifact_prefix,
+                compatible_robot_types=compatible_robot_types,
+                compatible_camera_layouts=compatible_camera_layouts,
+                rollout_reason=rollout_reason,
+                report_filename=report_filename,
+                device_state_roots=device_state_roots,
+                policy_type=policy_type,
+                batch_size=batch_size,
+            )
+            results.append(result)
+            self._append_history(result)
+            self._write_latest(result)
+            if max_iterations is not None and iteration >= max_iterations:
+                break
+            sleep_fn(poll_interval_s)
+
+        return ControllerLoopResult(
+            iterations=iteration,
+            results=results,
+            history_path=str(self.runtime_root / "history.jsonl"),
+            latest_path=str(self.runtime_root / "latest.json"),
+        )
+
+    def _run_iteration(
+        self,
+        *,
+        materialized_root: str | Path,
+        train_output_root: str | Path,
+        incident_root: str | Path,
+        report_root: str | Path,
+        channel: str,
+        artifact_prefix: str,
+        compatible_robot_types: list[str],
+        compatible_camera_layouts: list[str],
+        rollout_reason: str | None,
+        report_filename: str,
+        device_state_roots: dict[str, str] | None,
+        policy_type: str,
+        batch_size: int,
+    ) -> ControllerRunResult:
+        manifest_path = Path(materialized_root) / "manifest.json"
+        if not manifest_path.exists():
+            return ControllerRunResult(
+                action="waiting",
+                dataset_fingerprint=None,
+                artifact_id=None,
+                channel=channel,
+                state_path=str(self.controller.state_root / f"{channel}.json"),
+                report_path=None,
+            )
+        return self.controller.run_once(
+            materialized_root=materialized_root,
+            train_output_root=train_output_root,
+            incident_root=incident_root,
+            report_root=report_root,
+            channel=channel,
+            artifact_prefix=artifact_prefix,
+            compatible_robot_types=compatible_robot_types,
+            compatible_camera_layouts=compatible_camera_layouts,
+            rollout_reason=rollout_reason,
+            report_filename=report_filename,
+            device_state_roots=device_state_roots,
+            policy_type=policy_type,
+            batch_size=batch_size,
+        )
+
+    def _append_history(self, result: ControllerRunResult) -> None:
+        history_path = self.runtime_root / "history.jsonl"
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(result.to_dict(), sort_keys=True))
+            handle.write("\n")
+
+    def _write_latest(self, result: ControllerRunResult) -> None:
+        latest_path = self.runtime_root / "latest.json"
+        with latest_path.open("w", encoding="utf-8") as handle:
+            json.dump(result.to_dict(), handle, indent=2, sort_keys=True)
             handle.write("\n")
