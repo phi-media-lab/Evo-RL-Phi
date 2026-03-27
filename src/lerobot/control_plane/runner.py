@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from hashlib import sha256
+import logging
 from pathlib import Path
 import time
 from typing import Any
@@ -23,6 +25,9 @@ class ControllerRunResult:
     channel: str
     state_path: str
     report_path: str | None = None
+    started_at_utc: str | None = None
+    completed_at_utc: str | None = None
+    duration_s: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -45,6 +50,7 @@ class ControllerLoopResult:
     results: list[ControllerRunResult]
     history_path: str
     latest_path: str
+    metrics_path: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,7 +58,23 @@ class ControllerLoopResult:
             "results": [result.to_dict() for result in self.results],
             "history_path": self.history_path,
             "latest_path": self.latest_path,
+            "metrics_path": self.metrics_path,
         }
+
+
+@dataclass(frozen=True)
+class ControllerLoopMetrics:
+    iterations: int
+    waiting_count: int = 0
+    no_data_count: int = 0
+    noop_count: int = 0
+    released_count: int = 0
+    last_action: str | None = None
+    last_artifact_id: str | None = None
+    last_completed_at_utc: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class AutoReleaseController:
@@ -286,6 +308,14 @@ class AutoReleaseDaemon:
             results.append(result)
             self._append_history(result)
             self._write_latest(result)
+            self._write_metrics(results)
+            logging.info(
+                "auto-release iteration=%s action=%s artifact=%s duration_s=%s",
+                iteration,
+                result.action,
+                result.artifact_id,
+                result.duration_s,
+            )
             if max_iterations is not None and iteration >= max_iterations:
                 break
             sleep_fn(poll_interval_s)
@@ -295,6 +325,7 @@ class AutoReleaseDaemon:
             results=results,
             history_path=str(self.runtime_root / "history.jsonl"),
             latest_path=str(self.runtime_root / "latest.json"),
+            metrics_path=str(self.runtime_root / "metrics.json"),
         )
 
     def _run_iteration(
@@ -314,6 +345,8 @@ class AutoReleaseDaemon:
         policy_type: str,
         batch_size: int,
     ) -> ControllerRunResult:
+        started_at = self._utc_now()
+        started_perf = time.perf_counter()
         manifest_path = Path(materialized_root) / "manifest.json"
         if not manifest_path.exists():
             return ControllerRunResult(
@@ -323,8 +356,11 @@ class AutoReleaseDaemon:
                 channel=channel,
                 state_path=str(self.controller.state_root / f"{channel}.json"),
                 report_path=None,
+                started_at_utc=started_at,
+                completed_at_utc=self._utc_now(),
+                duration_s=round(time.perf_counter() - started_perf, 6),
             )
-        return self.controller.run_once(
+        result = self.controller.run_once(
             materialized_root=materialized_root,
             train_output_root=train_output_root,
             incident_root=incident_root,
@@ -339,6 +375,17 @@ class AutoReleaseDaemon:
             policy_type=policy_type,
             batch_size=batch_size,
         )
+        return ControllerRunResult(
+            action=result.action,
+            dataset_fingerprint=result.dataset_fingerprint,
+            artifact_id=result.artifact_id,
+            channel=result.channel,
+            state_path=result.state_path,
+            report_path=result.report_path,
+            started_at_utc=started_at,
+            completed_at_utc=self._utc_now(),
+            duration_s=round(time.perf_counter() - started_perf, 6),
+        )
 
     def _append_history(self, result: ControllerRunResult) -> None:
         history_path = self.runtime_root / "history.jsonl"
@@ -351,3 +398,22 @@ class AutoReleaseDaemon:
         with latest_path.open("w", encoding="utf-8") as handle:
             json.dump(result.to_dict(), handle, indent=2, sort_keys=True)
             handle.write("\n")
+
+    def _write_metrics(self, results: list[ControllerRunResult]) -> None:
+        metrics = ControllerLoopMetrics(
+            iterations=len(results),
+            waiting_count=sum(1 for result in results if result.action == "waiting"),
+            no_data_count=sum(1 for result in results if result.action == "no_data"),
+            noop_count=sum(1 for result in results if result.action == "noop"),
+            released_count=sum(1 for result in results if result.action == "released"),
+            last_action=None if not results else results[-1].action,
+            last_artifact_id=None if not results else results[-1].artifact_id,
+            last_completed_at_utc=None if not results else results[-1].completed_at_utc,
+        )
+        metrics_path = self.runtime_root / "metrics.json"
+        with metrics_path.open("w", encoding="utf-8") as handle:
+            json.dump(metrics.to_dict(), handle, indent=2, sort_keys=True)
+            handle.write("\n")
+
+    def _utc_now(self) -> str:
+        return datetime.now(timezone.utc).isoformat()

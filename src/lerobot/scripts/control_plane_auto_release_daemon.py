@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import logging
+from pathlib import Path
 
 from lerobot.control_plane.runner import AutoReleaseDaemon
+from lerobot.utils.utils import init_logging
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -45,11 +48,15 @@ def _parse_device_state_roots(values: list[str]) -> dict[str, str]:
 
 def main() -> None:
     args = build_arg_parser().parse_args()
+    runtime_root = Path(args.runtime_root)
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    init_logging(log_file=runtime_root / "daemon.log")
+    logging.info("starting auto release daemon for channel=%s", args.channel)
     result = AutoReleaseDaemon(
         registry_root=args.registry_root,
         artifact_output_root=args.artifact_output_root,
         state_root=args.state_root,
-        runtime_root=args.runtime_root,
+        runtime_root=runtime_root,
     ).run(
         materialized_root=args.materialized_root,
         train_output_root=args.train_output_root,
@@ -68,10 +75,18 @@ def main() -> None:
         max_iterations=args.max_iterations,
     )
     latest = result.results[-1] if result.results else None
+    logging.info(
+        "auto release daemon finished iterations=%s latest_action=%s latest_artifact=%s metrics=%s",
+        result.iterations,
+        None if latest is None else latest.action,
+        None if latest is None else latest.artifact_id,
+        result.metrics_path,
+    )
     print(
         f"auto-release-daemon iterations={result.iterations} "
         f"latest_action={None if latest is None else latest.action} "
-        f"latest_artifact={None if latest is None else latest.artifact_id}"
+        f"latest_artifact={None if latest is None else latest.artifact_id} "
+        f"metrics={result.metrics_path}"
     )
 
 

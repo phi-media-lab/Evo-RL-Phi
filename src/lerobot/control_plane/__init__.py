@@ -9,6 +9,7 @@ from .runner import (
     AutoReleaseController,
     AutoReleaseDaemon,
     ControllerLoopResult,
+    ControllerLoopMetrics,
     ControllerRunResult,
     ControllerRunState,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "AutoReleaseDaemon",
     "ChannelPublishResult",
     "ControllerLoopResult",
+    "ControllerLoopMetrics",
     "ControllerRunResult",
     "ControllerRunState",
     "DeviceChannelAssignment",

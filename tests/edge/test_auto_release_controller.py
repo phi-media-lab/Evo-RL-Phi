@@ -168,6 +168,10 @@ def test_auto_release_daemon_waits_when_no_manifest_exists(tmp_path):
 
     assert loop.iterations == 1
     assert loop.results[0].action == "waiting"
+    metrics_payload = json.loads((tmp_path / "controller_runtime" / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics_payload["iterations"] == 1
+    assert metrics_payload["waiting_count"] == 1
+    assert metrics_payload["last_action"] == "waiting"
 
 
 def test_auto_release_daemon_records_released_then_noop(tmp_path):
@@ -195,10 +199,16 @@ def test_auto_release_daemon_records_released_then_noop(tmp_path):
 
     history_path = tmp_path / "controller_runtime" / "history.jsonl"
     latest_path = tmp_path / "controller_runtime" / "latest.json"
+    metrics_path = tmp_path / "controller_runtime" / "metrics.json"
     history_lines = history_path.read_text(encoding="utf-8").strip().splitlines()
     latest_payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
 
     assert loop.iterations == 2
     assert [result.action for result in loop.results] == ["released", "noop"]
     assert len(history_lines) == 2
     assert latest_payload["action"] == "noop"
+    assert metrics_payload["iterations"] == 2
+    assert metrics_payload["released_count"] == 1
+    assert metrics_payload["noop_count"] == 1
+    assert metrics_payload["last_action"] == "noop"
