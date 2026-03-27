@@ -264,9 +264,11 @@ channel 维护当前目标 artifact：
 
 - edge 执行入口：`src/lerobot/scripts/edge_run_local.py`
 - control plane 汇总入口：`src/lerobot/scripts/control_plane_rollout_report.py`
+- cloud 统一运行入口：`src/lerobot/scripts/cloud_stack.py`
 - edge 核心模块：`runtime.py`、`runner.py`、`watchdog.py`、`deployment_loop.py`
-- 数据回流模块：`episode.py`、`recorder.py`、`spool.py`、`uploader.py`
-- 发布与观测模块：`model_manager.py`、`registry.py`、`incidents.py`、`rollout.py`
+- 数据回流模块：`episode.py`、`recorder.py`、`spool.py`、`uploader.py`、`ingestion.py`、`materializer.py`
+- 训练与产物模块：`cloud_train_smoke.py`、`artifact_builder.py`、`cloud_train_and_build.py`
+- 发布与观测模块：`model_manager.py`、`registry.py`、`incidents.py`、`rollout.py`、`controller.py`、`runner.py`
 
 当前测试覆盖：
 
@@ -279,15 +281,25 @@ channel 维护当前目标 artifact：
 - `tests/edge/test_incident_aggregator.py`
 - `tests/edge/test_rollout_status.py`
 - `tests/edge/test_control_plane_rollout_report.py`
+- `tests/edge/test_http_ingestion.py`
+- `tests/edge/test_materializer.py`
+- `tests/edge/test_http_materializer.py`
+- `tests/edge/test_artifact_builder.py`
+- `tests/edge/test_train_and_build.py`
+- `tests/edge/test_release_controller.py`
+- `tests/edge/test_release_cycle.py`
+- `tests/edge/test_auto_release_controller.py`
+- `tests/edge/test_cloud_stack.py`
+- `tests/edge/test_control_plane_daemon_assets.py`
 
 当前状态判断：
 
 - Phase 0：已完成
 - Phase 1：已完成最小稳定版本
-- Phase 2：已完成本地闭环版本，云端服务仍未做
-- Phase 3：未开始
-- Phase 4：已完成最小控制面闭环
-- Phase 5：未开始
+- Phase 2：已完成服务化最小版本
+- Phase 3：已完成训练 smoke 和 artifact build 最小版本
+- Phase 4：已完成最小控制面闭环，并已具备常驻 daemon / cloud stack
+- Phase 5：已完成最小自动 release loop，仍未产品化
 
 ## Phase 0：冻结契约
 
@@ -357,7 +369,7 @@ channel 维护当前目标 artifact：
 
 目标：本地数据稳定上传，云端能 materialize 成训练输入。
 
-当前状态：已完成本地闭环版本
+当前状态：已完成服务化最小版本
 
 交付物：
 
@@ -387,18 +399,22 @@ channel 维护当前目标 artifact：
 - `EdgeEpisodeRecorder`
 - `EdgeEpisodeUploader`
 - `FilesystemEpisodeIngestionStore`
+- `HTTPIngestionClient` / `EpisodeIngestionHTTPServer`
+- `FilesystemEpisodeMaterializer`
+- `HTTPMaterializerClient` / `MaterializerHTTPServer`
+- `cloud_materialize_dataset.py`
 
 当前未实现：
 
-- 真实云端 ingestion service
-- dataset materializer
-- 与现有训练脚本的真实数据集接通
+- 生产级鉴权 / 多租户 / 对象存储版 ingestion
+- 长时间运行下的存储分层和清理策略
+- 非文件系统后端
 
 ## Phase 3：云端训练与评测
 
 目标：训练端能稳定消费回流数据并产出候选模型。
 
-当前状态：未开始
+当前状态：已完成最小 smoke 版本
 
 交付物：
 
@@ -421,11 +437,26 @@ channel 维护当前目标 artifact：
 - candidate artifact 可追溯到训练数据和代码版本
 - 未通过评测的模型不会进入发布通道
 
+当前已实现：
+
+- `materialize_to_lerobot_dataset()`
+- `cloud_train_smoke.py`
+- `FilesystemArtifactBuilder`
+- `cloud_build_artifact.py`
+- `cloud_train_and_build.py`
+- `cloud_train_build_and_release.py`
+
+当前未实现：
+
+- 长时训练 job 管理
+- 真正的 offline eval / sim eval gate
+- 多实验调度和资源隔离
+
 ## Phase 4：控制面与灰度发布
 
 目标：支持 staging 验证、单机 canary 和 prod 回滚。
 
-当前状态：已完成最小控制面闭环
+当前状态：已完成最小控制面闭环，并已进入常驻运行形态
 
 交付物：
 
@@ -451,6 +482,7 @@ channel 维护当前目标 artifact：
 当前已实现：
 
 - `ReleaseRegistry`
+- `ReleaseController`
 - `EdgeModelManager.sync_to_registry_target`
 - `EdgeDeploymentLoop` 的 episode boundary sync
 - `model_crash -> rollback_or_safe_stop`
@@ -458,19 +490,26 @@ channel 维护当前目标 artifact：
 - `IncidentAggregator`
 - `RolloutStatusBuilder` / `RolloutStatusStore`
 - `control_plane_rollout_report.py`
+- `run_release_cycle()`
+- `AutoReleaseController`
+- `AutoReleaseDaemon`
+- `cloud_stack.py`
+- `cloud_stack` 的 `/healthz`、`/status`
+- `cloud_stack_tmux.sh` / `cloud_stack.service`
+- 同一常驻 `cloud_stack` 会话连续处理多批 ingestion 的实机验收
 
 当前未实现：
 
-- 真正的 release controller 服务
-- 设备定时轮询守护进程
+- 完整审批流和人工 gate
 - 审计日志服务化
 - 线上健康状态远程上报
+- 多设备、多 channel 的 rollout policy 编排
 
 ## Phase 5：近在线闭环
 
 目标：让回流数据自动进入周期训练和受控发布。
 
-当前状态：未开始
+当前状态：已完成最小自动 release loop，仍未产品化
 
 交付物：
 
@@ -490,6 +529,20 @@ channel 维护当前目标 artifact：
 - 新数据可在固定周期进入训练
 - `staging` 自动更新但 `prod` 仍受控
 - 线上异常时能快速停止自动推广
+
+当前已实现：
+
+- 基于 `materialized/manifest.json` 的 dataset fingerprint 判定
+- 新数据触发 `train -> build -> release -> report`
+- 无新数据时 `noop`
+- 持久化 `history.jsonl`、`latest.json`、`metrics.json`
+- 常驻 `cloud_stack` 在 release 完成后继续提供状态端点
+
+当前未实现：
+
+- `prod` 的人工 gate
+- canary / 分层推广策略
+- blocker 规则和自动 halt
 
 ## 10. 工作流拆分
 
@@ -564,29 +617,38 @@ src/lerobot/edge/
 src/lerobot/control_plane/
   __init__.py
   artifact.py
+  controller.py
   incidents.py
   registry.py
   release.py
+  runner.py
   rollout.py
 
 src/lerobot/cloud/
   ingestion.py
+  materializer.py
+  artifact_builder.py
 
 src/lerobot/scripts/
+  cloud_build_artifact.py
+  cloud_materialize_dataset.py
+  cloud_stack.py
+  cloud_train_and_build.py
+  cloud_train_build_and_release.py
+  cloud_train_smoke.py
+  control_plane_auto_release_daemon.py
   edge_run_local.py
   control_plane_rollout_report.py
+  control_plane_release_cycle.py
 ```
 
 后续保留扩展位：
 
 ```text
 src/lerobot/cloud/
-  materializer.py
-  artifact_builder.py
   trainer_bridge.py
 
 src/lerobot/control_plane/
-  controller.py
   audit.py
   health.py
 ```
@@ -628,10 +690,10 @@ src/lerobot/control_plane/
 
 以上 1-7 已完成最小版本。当前更合理的下一步是：
 
-1. 实现真实 ingestion service 和 dataset materializer。
-2. 把回流 episode 接到现有训练脚本输入。
-3. 实现 artifact builder，把 checkpoint 打包成标准 deployment artifact。
-4. 将 release controller 从本地文件流升级成服务化状态机。
+1. 将 `cloud_stack` 的运行产物和告警进一步产品化。
+2. 为 `prod` 补人工 gate、审批和回滚阻断规则。
+3. 引入更真实的训练 job、评测和 artifact promotion 条件。
+4. 将文件系统后端逐步升级到更稳定的远端存储 / 服务接口。
 
 ## 14. 完成定义
 
@@ -643,10 +705,10 @@ src/lerobot/control_plane/
 - staging 和 prod 的发布语义清晰且可回滚
 - reward / done / schema / ABI 没有歧义
 
-按当前代码状态，这个“第一阶段完成定义”已经基本满足，但仍缺两项真正产品化能力：
+按当前代码状态，这个“第一阶段完成定义”已经满足最小闭环版本，但仍缺真正产品化能力：
 
-- 云端 materializer / trainer / artifact builder 的接通
-- 服务化的 release controller 与远程健康上报
+- 更严格的训练 / 评测 / promote gate
+- 远程健康上报、审计和长期运行运维能力
 
 ## 15. 结论
 

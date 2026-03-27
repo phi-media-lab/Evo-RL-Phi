@@ -1,6 +1,11 @@
 # Runpod Setup
 
-这份文档用于把 Evo-RL 的云端开发环境部署到 Runpod 服务器，并为后续的 `ingestion / materializer / training / artifact build` 做准备。
+这份文档用于把 Evo-RL 的云端开发环境部署到 Runpod 服务器，并运行当前已经具备的最小常驻 cloud stack：
+
+- HTTP ingestion service
+- HTTP materializer service
+- auto-release daemon
+- unified status / health endpoint
 
 ## 1. 目标
 
@@ -192,7 +197,7 @@ tmux attach -t evorl
 tmux ls
 ```
 
-统一 cloud stack 可以直接挂在 `tmux` 里运行，例如：
+统一 cloud stack 可以直接挂在 `tmux` 里运行。当前建议默认使用常驻模式：
 
 ```bash
 cd /workspace/Evo-RL
@@ -218,7 +223,9 @@ python -m lerobot.scripts.cloud_stack \
   --channel staging \
   --artifact-prefix artifact-cloud-stack \
   --robot-type mock_robot \
-  --camera-layout single_arm_mock
+  --camera-layout single_arm_mock \
+  --keep-alive \
+  --idle-sleep-s 5
 ```
 
 启动后重点看这些文件：
@@ -234,6 +241,12 @@ HTTP 探活和状态：
 - `http://127.0.0.1:8002/healthz`
 - `http://127.0.0.1:8002/status`
 
+当前实现里：
+
+- release 完成后 stack 会继续保活
+- `/status` 会持续刷新最新 `artifact_id` 和 `latest_action`
+- 同一常驻会话可以连续消费多批 ingestion 数据
+
 如果你不想手敲长命令，仓库里已经带了 `tmux` 包装脚本：
 
 ```bash
@@ -242,6 +255,14 @@ chmod +x scripts/cloud_stack_tmux.sh
 SESSION_NAME=evorl-cloud-stack scripts/cloud_stack_tmux.sh start
 SESSION_NAME=evorl-cloud-stack scripts/cloud_stack_tmux.sh status
 SESSION_NAME=evorl-cloud-stack scripts/cloud_stack_tmux.sh logs
+```
+
+如果当前环境的 `conda activate` 链路不稳定，可以显式指定 Python：
+
+```bash
+PYTHON_BIN=/workspace/miniconda3/envs/lerobot/bin/python \
+  SESSION_NAME=evorl-cloud-stack \
+  scripts/cloud_stack_tmux.sh start
 ```
 
 停止方式：
@@ -264,10 +285,10 @@ sudo systemctl status evorl-cloud-stack.service
 Runpod 环境就绪后，优先顺序建议是：
 
 1. 跑通当前测试，确认基础环境没问题
-2. 明确 `/workspace/data/ingestion` 和 `/workspace/data/materialized` 的真实路径
-3. 开始实现真实 `ingestion service`
-4. 再实现 `dataset materializer`
-5. 最后接训练和 artifact builder
+2. 用 `cloud_stack.py` 或 `cloud_stack_tmux.sh` 跑起统一云端栈
+3. 确认 `/healthz`、`/status`、`latest.json`、`metrics.json` 都正常
+4. 从 edge 侧接入真实 HTTP upload，验证 `ingest -> materialize -> release`
+5. 最后再替换文件系统后端或补更严格的训练 / promote gate
 
 ## 10. 一键脚本
 
@@ -309,6 +330,18 @@ export PIP_CACHE_DIR=/workspace/cache/pip
 ### 会话断开后任务没了
 
 说明没有放进 `tmux`。
+
+### `cloud_stack_tmux.sh` 提示权限不够
+
+先执行：
+
+```bash
+chmod +x scripts/cloud_stack_tmux.sh
+```
+
+### release 完成后 `/status` 访问失败
+
+先确认是不是没开 `--keep-alive`。当前推荐默认使用常驻模式；如果是单轮模式，release 完成后服务会自然退出。
 
 ### 路径混乱
 

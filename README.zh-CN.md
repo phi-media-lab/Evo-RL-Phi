@@ -15,11 +15,14 @@ Evo-RL 是一个基于 LeRobot 的真实机器人强化学习代码库，当前�
 
 - 本地 edge 执行
 - episode spool 和 upload
+- HTTP ingestion 和 materializer
+- 训练 smoke 与 artifact build
 - artifact 与 channel 化发布
 - episode boundary 模型切换
 - `model_crash` 回滚
 - incident 聚合
 - control-plane rollout report
+- 常驻 cloud stack 编排
 
 ## 当前状态
 
@@ -27,7 +30,10 @@ Evo-RL 是一个基于 LeRobot 的真实机器人强化学习代码库，当前�
 
 - edge runtime contract、episode schema、artifact manifest、release schema
 - local runtime、watchdog、runner、recorder、spool、uploader
-- 文件系统版 ingestion sink
+- 文件系统版和 HTTP 版 ingestion
+- 文件系统版和 HTTP 版 materializer
+- 导出本地 `LeRobotDataset`
+- 一步训练 smoke 和 artifact builder
 - release registry 与 device/channel mapping
 - 维护 active / pending / previous-active 的 model manager
 - episode boundary deployment loop
@@ -35,14 +41,13 @@ Evo-RL 是一个基于 LeRobot 的真实机器人强化学习代码库，当前�
 - edge incident sink
 - control-plane incident aggregation
 - rollout status snapshot builder 与 report script
+- auto-release daemon 与统一 `cloud_stack`
 
 当前未实现：
 
-- 真实远端 ingestion service
-- dataset materializer
-- 将回流 edge episode 真正接入训练 pipeline
-- 从真实 checkpoint 构建 deployment artifact
-- 服务化 release controller
+- 生产级鉴权和存储后端
+- 长时间训练 job 与真实评测 gate
+- 生产级审批和 promote 流程
 - 远程健康上报与生产审计链路
 
 详细实施计划和阶段状态见 [DRAFT.md](./DRAFT.md)。
@@ -56,9 +61,11 @@ Evo-RL 是一个基于 LeRobot 的真实机器人强化学习代码库，当前�
 - [src/lerobot/control_plane](./src/lerobot/control_plane)
   artifact schema、registry、incident aggregation、rollout status reporting。
 - [src/lerobot/cloud](./src/lerobot/cloud)
-  当前最小 ingestion 协议和本地 sink。
+  ingestion、materializer、artifact build 和云端辅助逻辑。
 - [src/lerobot/scripts/edge_run_local.py](./src/lerobot/scripts/edge_run_local.py)
   边缘执行入口。
+- [src/lerobot/scripts/cloud_stack.py](./src/lerobot/scripts/cloud_stack.py)
+  统一云端栈入口。
 - [src/lerobot/scripts/control_plane_rollout_report.py](./src/lerobot/scripts/control_plane_rollout_report.py)
   控制面 report 入口。
 
@@ -132,6 +139,29 @@ python -m lerobot.scripts.control_plane_rollout_report --help
 - [src/lerobot/control_plane/incidents.py](./src/lerobot/control_plane/incidents.py)
 - [src/lerobot/control_plane/rollout.py](./src/lerobot/control_plane/rollout.py)
 
+### Unified Cloud Stack 入口
+
+查看统一云端栈参数：
+
+```bash
+python -m lerobot.scripts.cloud_stack --help
+```
+
+当前支持：
+
+- HTTP ingestion
+- HTTP materializer
+- 新数据触发 auto release
+- `tmux` / `systemd` 常驻部署资产
+- `/healthz` 和 `/status` 状态端点
+
+核心实现：
+
+- [src/lerobot/scripts/cloud_stack.py](./src/lerobot/scripts/cloud_stack.py)
+- [src/lerobot/scripts/control_plane_auto_release_daemon.py](./src/lerobot/scripts/control_plane_auto_release_daemon.py)
+- [src/lerobot/cloud/ingestion.py](./src/lerobot/cloud/ingestion.py)
+- [src/lerobot/cloud/materializer.py](./src/lerobot/cloud/materializer.py)
+
 ## 测试
 
 当前 edge/control-plane 骨架的测试位于 [tests/edge](./tests/edge)：
@@ -145,6 +175,15 @@ python -m lerobot.scripts.control_plane_rollout_report --help
 - `test_incident_aggregator.py`
 - `test_rollout_status.py`
 - `test_control_plane_rollout_report.py`
+- `test_http_ingestion.py`
+- `test_materializer.py`
+- `test_http_materializer.py`
+- `test_artifact_builder.py`
+- `test_train_and_build.py`
+- `test_release_controller.py`
+- `test_release_cycle.py`
+- `test_auto_release_controller.py`
+- `test_cloud_stack.py`
 
 运行当前回归：
 

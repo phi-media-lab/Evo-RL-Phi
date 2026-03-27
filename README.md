@@ -15,11 +15,14 @@ This repository is currently beyond the “architecture-only” stage. It alread
 
 - local edge execution
 - episode spool and upload
+- HTTP ingestion and materialization
+- training smoke and artifact build
 - artifact and channel-based rollout
 - boundary-based model switching
 - model-crash rollback
 - incident aggregation
 - control-plane rollout reporting
+- persistent cloud stack orchestration
 
 ## Current Status
 
@@ -27,7 +30,10 @@ Implemented today:
 
 - edge runtime contracts, episode schema, artifact manifest, release schema
 - local runtime, watchdog, runner, recorder, spool, uploader
-- filesystem-backed ingestion sink
+- filesystem-backed and HTTP-backed ingestion
+- filesystem-backed and HTTP-backed materializer
+- materialization to local `LeRobotDataset`
+- one-step training smoke and artifact builder
 - release registry and device/channel mapping
 - model manager with active, pending, and previous-active artifact state
 - episode-boundary deployment loop
@@ -35,14 +41,13 @@ Implemented today:
 - incident sink on edge
 - control-plane incident aggregation
 - rollout status snapshot builder and report script
+- auto-release daemon and unified `cloud_stack`
 
 Not implemented yet:
 
-- real remote ingestion service
-- dataset materializer
-- training pipeline wired to uploaded edge episodes
-- artifact builder from real checkpoints
-- service-style release controller
+- production-grade auth and storage backends
+- long-running training jobs with real eval gates
+- production-grade approval and promotion workflow
 - remote health reporting and production audit pipeline
 
 Detailed project plan and phase tracking live in [DRAFT.md](./DRAFT.md).
@@ -56,9 +61,11 @@ Key modules:
 - [src/lerobot/control_plane](./src/lerobot/control_plane)
   Artifact schema, registry, incident aggregation, rollout status reporting.
 - [src/lerobot/cloud](./src/lerobot/cloud)
-  Current minimal ingestion-side protocol and local sink.
+  Ingestion, materializer, artifact build, and cloud-side helpers.
 - [src/lerobot/scripts/edge_run_local.py](./src/lerobot/scripts/edge_run_local.py)
   Edge execution entrypoint.
+- [src/lerobot/scripts/cloud_stack.py](./src/lerobot/scripts/cloud_stack.py)
+  Unified cloud stack entrypoint.
 - [src/lerobot/scripts/control_plane_rollout_report.py](./src/lerobot/scripts/control_plane_rollout_report.py)
   Control-plane rollout report entrypoint.
 
@@ -132,6 +139,29 @@ Core implementation:
 - [src/lerobot/control_plane/incidents.py](./src/lerobot/control_plane/incidents.py)
 - [src/lerobot/control_plane/rollout.py](./src/lerobot/control_plane/rollout.py)
 
+### Unified Cloud Stack
+
+Run the combined ingestion, materializer, and auto-release stack with:
+
+```bash
+python -m lerobot.scripts.cloud_stack --help
+```
+
+This path supports:
+
+- HTTP ingestion
+- HTTP materialization
+- auto release on new materialized data
+- persistent `tmux`/`systemd` deployment assets
+- `/healthz` and `/status` endpoints
+
+Core implementation:
+
+- [src/lerobot/scripts/cloud_stack.py](./src/lerobot/scripts/cloud_stack.py)
+- [src/lerobot/scripts/control_plane_auto_release_daemon.py](./src/lerobot/scripts/control_plane_auto_release_daemon.py)
+- [src/lerobot/cloud/ingestion.py](./src/lerobot/cloud/ingestion.py)
+- [src/lerobot/cloud/materializer.py](./src/lerobot/cloud/materializer.py)
+
 ## Tests
 
 The current edge/control-plane skeleton is covered by focused tests under [tests/edge](./tests/edge):
@@ -145,6 +175,15 @@ The current edge/control-plane skeleton is covered by focused tests under [tests
 - `test_incident_aggregator.py`
 - `test_rollout_status.py`
 - `test_control_plane_rollout_report.py`
+- `test_http_ingestion.py`
+- `test_materializer.py`
+- `test_http_materializer.py`
+- `test_artifact_builder.py`
+- `test_train_and_build.py`
+- `test_release_controller.py`
+- `test_release_cycle.py`
+- `test_auto_release_controller.py`
+- `test_cloud_stack.py`
 
 Run the current regression suite with:
 
