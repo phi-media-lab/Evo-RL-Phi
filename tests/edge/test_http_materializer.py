@@ -62,3 +62,31 @@ def test_http_materializer_exports_lerobot_dataset(tmp_path):
     assert manifest["lerobot_root"] == str(tmp_path / "lerobot_dataset")
     assert dataset.num_episodes == 1
     assert dataset.num_frames == 3
+
+
+def test_http_materializer_can_overwrite_existing_dataset_root(tmp_path):
+    _build_committed_episode(tmp_path)
+    server, thread = _start_materializer_server(tmp_path)
+    client = HTTPMaterializerClient(f"http://127.0.0.1:{server.server_port}")
+    try:
+        first = client.materialize(
+            repo_id="local/http-materialized-repeat",
+            fps=20,
+            export_lerobot_dataset=True,
+        )
+        second = client.materialize(
+            repo_id="local/http-materialized-repeat",
+            fps=20,
+            export_lerobot_dataset=True,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    dataset = LeRobotDataset("local/http-materialized-repeat", root=tmp_path / "lerobot_dataset")
+
+    assert first["status"] == "materialized"
+    assert second["status"] == "materialized"
+    assert dataset.num_episodes == 1
+    assert dataset.num_frames == 3

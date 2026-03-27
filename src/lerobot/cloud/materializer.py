@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from dataclasses import asdict, dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -271,6 +272,8 @@ class FilesystemEpisodeMaterializer:
             include_env_state_alias=include_env_state_alias,
         )
         dataset_root = Path(dataset_root)
+        if dataset_root.exists():
+            shutil.rmtree(dataset_root)
         dataset = LeRobotDataset.create(
             repo_id=repo_id,
             fps=fps,
