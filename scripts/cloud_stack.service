@@ -1,0 +1,34 @@
+[Unit]
+Description=Evo-RL Unified Cloud Stack
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/workspace/Evo-RL
+Environment=WORKSPACE_ROOT=/workspace
+Environment=ENV_NAME=lerobot
+Environment=HOST=127.0.0.1
+Environment=INGESTION_PORT=8000
+Environment=MATERIALIZER_PORT=8001
+Environment=STATUS_PORT=8002
+Environment=INGESTION_ROOT=/workspace/data/ingestion
+Environment=MATERIALIZED_ROOT=/workspace/data/materialized
+Environment=DATASET_ROOT=/workspace/data/dataset
+Environment=TRAIN_OUTPUT_ROOT=/workspace/outputs/train
+Environment=ARTIFACT_OUTPUT_ROOT=/workspace/artifacts
+Environment=REGISTRY_ROOT=/workspace/data/registry
+Environment=STATE_ROOT=/workspace/data/controller_state
+Environment=RUNTIME_ROOT=/workspace/logs/cloud_stack
+Environment=INCIDENT_ROOT=/workspace/data/incidents
+Environment=REPORT_ROOT=/workspace/data/reports
+Environment=CHANNEL=staging
+Environment=ARTIFACT_PREFIX=artifact-cloud-stack
+Environment=ROBOT_TYPE=mock_robot
+Environment=CAMERA_LAYOUT=single_arm_mock
+Environment=POLL_INTERVAL_S=5
+ExecStart=/bin/bash -lc 'if [ -f "$WORKSPACE_ROOT/runpod_env.sh" ]; then source "$WORKSPACE_ROOT/runpod_env.sh"; fi && source "$(conda info --base)/etc/profile.d/conda.sh" && conda activate "$ENV_NAME" && python -m lerobot.scripts.cloud_stack --host "$HOST" --ingestion-port "$INGESTION_PORT" --materializer-port "$MATERIALIZER_PORT" --status-port "$STATUS_PORT" --ingestion-root "$INGESTION_ROOT" --materialized-root "$MATERIALIZED_ROOT" --dataset-root "$DATASET_ROOT" --train-output-root "$TRAIN_OUTPUT_ROOT" --artifact-output-root "$ARTIFACT_OUTPUT_ROOT" --registry-root "$REGISTRY_ROOT" --state-root "$STATE_ROOT" --runtime-root "$RUNTIME_ROOT" --incident-root "$INCIDENT_ROOT" --report-root "$REPORT_ROOT" --channel "$CHANNEL" --artifact-prefix "$ARTIFACT_PREFIX" --robot-type "$ROBOT_TYPE" --camera-layout "$CAMERA_LAYOUT" --poll-interval-s "$POLL_INTERVAL_S"'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

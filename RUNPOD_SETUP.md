@@ -192,7 +192,7 @@ tmux attach -t evorl
 tmux ls
 ```
 
-控制面 daemon 可以直接挂在 `tmux` 里运行，例如：
+统一 cloud stack 可以直接挂在 `tmux` 里运行，例如：
 
 ```bash
 cd /workspace/Evo-RL
@@ -200,55 +200,64 @@ source /workspace/runpod_env.sh
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate lerobot
 
-python -m lerobot.scripts.control_plane_auto_release_daemon \
+python -m lerobot.scripts.cloud_stack \
+  --host 127.0.0.1 \
+  --ingestion-port 8000 \
+  --materializer-port 8001 \
+  --status-port 8002 \
+  --ingestion-root /workspace/data/ingestion \
   --materialized-root /workspace/data/materialized \
+  --dataset-root /workspace/data/dataset \
   --train-output-root /workspace/outputs/train \
   --artifact-output-root /workspace/artifacts \
   --registry-root /workspace/data/registry \
   --state-root /workspace/data/controller_state \
-  --runtime-root /workspace/logs/control_plane_auto_release \
+  --runtime-root /workspace/logs/cloud_stack \
   --incident-root /workspace/data/incidents \
   --report-root /workspace/data/reports \
   --channel staging \
-  --artifact-prefix artifact-auto-release \
+  --artifact-prefix artifact-cloud-stack \
   --robot-type mock_robot \
   --camera-layout single_arm_mock
 ```
 
 启动后重点看这些文件：
 
-- `/workspace/logs/control_plane_auto_release/daemon.log`
-- `/workspace/logs/control_plane_auto_release/history.jsonl`
-- `/workspace/logs/control_plane_auto_release/latest.json`
-- `/workspace/logs/control_plane_auto_release/metrics.json`
+- `/workspace/logs/cloud_stack/daemon.log`
+- `/workspace/logs/cloud_stack/history.jsonl`
+- `/workspace/logs/cloud_stack/latest.json`
+- `/workspace/logs/cloud_stack/metrics.json`
+- `/workspace/logs/cloud_stack/cloud_stack_status.json`
+
+HTTP 探活和状态：
+
+- `http://127.0.0.1:8002/healthz`
+- `http://127.0.0.1:8002/status`
 
 如果你不想手敲长命令，仓库里已经带了 `tmux` 包装脚本：
 
 ```bash
 cd /workspace/Evo-RL
-chmod +x scripts/control_plane_auto_release_tmux.sh
-SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh start
-SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh status
-SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh logs
+chmod +x scripts/cloud_stack_tmux.sh
+SESSION_NAME=evorl-cloud-stack scripts/cloud_stack_tmux.sh start
+SESSION_NAME=evorl-cloud-stack scripts/cloud_stack_tmux.sh status
+SESSION_NAME=evorl-cloud-stack scripts/cloud_stack_tmux.sh logs
 ```
 
 停止方式：
 
 ```bash
-SESSION_NAME=evorl-control-plane scripts/control_plane_auto_release_tmux.sh stop
+SESSION_NAME=evorl-cloud-stack scripts/cloud_stack_tmux.sh stop
 ```
 
 如果你所在环境支持 `systemd`，仓库也附带了 unit 模板：
 
 ```bash
-sudo cp scripts/control_plane_auto_release.service /etc/systemd/system/evorl-auto-release.service
+sudo cp scripts/cloud_stack.service /etc/systemd/system/evorl-cloud-stack.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now evorl-auto-release.service
-sudo systemctl status evorl-auto-release.service
+sudo systemctl enable --now evorl-cloud-stack.service
+sudo systemctl status evorl-cloud-stack.service
 ```
-- `/workspace/logs/control_plane_auto_release/history.jsonl`
-- `/workspace/logs/control_plane_auto_release/latest.json`
-- `/workspace/logs/control_plane_auto_release/metrics.json`
 
 ## 9. 当前阶段推荐先做什么
 
