@@ -13,6 +13,7 @@ from lerobot.edge.runner import EdgeRobotRunner
 from lerobot.edge.spool import EdgeEpisodeSpool
 from lerobot.edge.uploader import EdgeEpisodeUploader, EdgeUploaderConfig
 from lerobot.robots.utils import make_robot_from_config
+from lerobot.scripts.control_plane_auto_release_daemon import run_auto_release_daemon
 from tests.mocks.mock_robot import MockRobotConfig
 
 
@@ -212,3 +213,31 @@ def test_auto_release_daemon_records_released_then_noop(tmp_path):
     assert metrics_payload["released_count"] == 1
     assert metrics_payload["noop_count"] == 1
     assert metrics_payload["last_action"] == "noop"
+
+
+def test_run_auto_release_daemon_writes_runtime_outputs(tmp_path):
+    _, materialized_root = _materialize_dataset(tmp_path)
+
+    output = run_auto_release_daemon(
+        materialized_root=str(materialized_root),
+        train_output_root=str(tmp_path / "train_runs"),
+        artifact_output_root=str(tmp_path / "artifacts"),
+        registry_root=str(tmp_path / "registry"),
+        state_root=str(tmp_path / "controller_state"),
+        runtime_root=str(tmp_path / "controller_runtime"),
+        incident_root=str(tmp_path / "incidents"),
+        report_root=str(tmp_path / "reports"),
+        channel="staging",
+        artifact_prefix="artifact-auto-release",
+        compatible_robot_types=["mock_robot"],
+        compatible_camera_layouts=["single_arm_mock"],
+        rollout_reason="auto promote materialized dataset",
+        poll_interval_s=0.0,
+        max_iterations=1,
+    )
+
+    runtime_root = tmp_path / "controller_runtime"
+    assert "auto-release-daemon iterations=1" in output
+    assert (runtime_root / "daemon.log").exists()
+    assert (runtime_root / "metrics.json").exists()
+    assert (runtime_root / "latest.json").exists()

@@ -192,6 +192,36 @@ tmux attach -t evorl
 tmux ls
 ```
 
+控制面 daemon 可以直接挂在 `tmux` 里运行，例如：
+
+```bash
+cd /workspace/Evo-RL
+source /workspace/runpod_env.sh
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate lerobot
+
+python -m lerobot.scripts.control_plane_auto_release_daemon \
+  --materialized-root /workspace/data/materialized \
+  --train-output-root /workspace/outputs/train \
+  --artifact-output-root /workspace/artifacts \
+  --registry-root /workspace/data/registry \
+  --state-root /workspace/data/controller_state \
+  --runtime-root /workspace/logs/control_plane_auto_release \
+  --incident-root /workspace/data/incidents \
+  --report-root /workspace/data/reports \
+  --channel staging \
+  --artifact-prefix artifact-auto-release \
+  --robot-type mock_robot \
+  --camera-layout single_arm_mock
+```
+
+启动后重点看这些文件：
+
+- `/workspace/logs/control_plane_auto_release/daemon.log`
+- `/workspace/logs/control_plane_auto_release/history.jsonl`
+- `/workspace/logs/control_plane_auto_release/latest.json`
+- `/workspace/logs/control_plane_auto_release/metrics.json`
+
 ## 9. 当前阶段推荐先做什么
 
 Runpod 环境就绪后，优先顺序建议是：
