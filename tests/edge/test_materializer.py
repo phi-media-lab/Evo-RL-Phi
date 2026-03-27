@@ -6,15 +6,17 @@ import json
 
 from lerobot.cloud.ingestion import FilesystemEpisodeIngestionStore
 from lerobot.cloud.materializer import FilesystemEpisodeMaterializer
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.edge.mock_runtime import StaticActionRuntime, StaticActionRuntimeConfig
 from lerobot.edge.runner import EdgeRobotRunner
 from lerobot.edge.spool import EdgeEpisodeSpool
 from lerobot.edge.uploader import EdgeEpisodeUploader, EdgeUploaderConfig
 from lerobot.robots.utils import make_robot_from_config
+from lerobot.utils.constants import ACTION, DONE, OBS_STATE, REWARD
 from tests.mocks.mock_robot import MockRobotConfig
 
 
-def test_materializer_builds_dataset_manifest_from_committed_ingestion(tmp_path):
+def _build_committed_episode(tmp_path):
     robot = make_robot_from_config(
         MockRobotConfig(
             n_motors=3,
@@ -52,6 +54,11 @@ def test_materializer_builds_dataset_manifest_from_committed_ingestion(tmp_path)
         config=EdgeUploaderConfig(steps_per_chunk=2),
     )
     uploader.upload_episode(result.episode_id)
+    return result
+
+
+def test_materializer_builds_dataset_manifest_from_committed_ingestion(tmp_path):
+    result = _build_committed_episode(tmp_path)
 
     materializer = FilesystemEpisodeMaterializer(
         ingestion_root=tmp_path / "ingestion",
@@ -72,3 +79,37 @@ def test_materializer_builds_dataset_manifest_from_committed_ingestion(tmp_path)
         steps = [json.loads(line) for line in handle]
     assert len(steps) == 3
     assert steps[0]["step_idx"] == 0
+
+
+def test_materializer_exports_local_lerobot_dataset(tmp_path):
+    _build_committed_episode(tmp_path)
+
+    materializer = FilesystemEpisodeMaterializer(
+        ingestion_root=tmp_path / "ingestion",
+        output_root=tmp_path / "materialized",
+    )
+    manifest = materializer.materialize_to_lerobot_dataset(
+        repo_id="local/mock-edge",
+        dataset_root=tmp_path / "lerobot_dataset",
+        fps=20,
+    )
+
+    assert manifest.episode_count == 1
+    assert manifest.total_step_count == 3
+    assert manifest.lerobot_repo_id == "local/mock-edge"
+    assert manifest.lerobot_root == str(tmp_path / "lerobot_dataset")
+
+    dataset = LeRobotDataset("local/mock-edge", root=tmp_path / "lerobot_dataset")
+    sample = dataset[0]
+
+    assert dataset.num_episodes == 1
+    assert dataset.num_frames == 3
+    assert ACTION in sample
+    assert OBS_STATE in sample
+    assert REWARD in sample
+    assert DONE in sample
+    assert sample[ACTION].shape[0] == 3
+    assert sample[OBS_STATE].shape[0] == 3
+    assert sample["task"] == "materialize-task"
+    assert bool(sample[DONE].item()) is False
+    assert float(sample[REWARD].item()) == 0.0
