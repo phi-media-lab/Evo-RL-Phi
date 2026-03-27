@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader
@@ -31,7 +32,9 @@ def run_training_smoke(
     output_dir: str,
     policy_type: str = "act",
     batch_size: int = 1,
+    save_policy: bool = False,
 ) -> dict[str, float | int | str]:
+    output_dir = str(output_dir)
     cfg = TrainPipelineConfig(
         dataset=DatasetConfig(repo_id=repo_id, root=dataset_root),
         policy=make_policy_config(policy_type, push_to_hub=False, device="cpu"),
@@ -57,12 +60,20 @@ def run_training_smoke(
     loss.backward()
     optimizer.step()
 
-    return {
+    result: dict[str, float | int | str] = {
         "dataset_num_frames": len(dataset),
         "dataset_num_episodes": dataset.num_episodes,
         "policy_type": policy_type,
         "loss": float(loss.item()),
+        "dataset_root": str(dataset_root),
+        "output_dir": output_dir,
+        "stats_path": str(Path(dataset_root) / "meta" / "stats.json"),
     }
+    if save_policy:
+        policy_dir = Path(output_dir) / "pretrained_policy"
+        policy.save_pretrained(policy_dir)
+        result["policy_dir"] = str(policy_dir)
+    return result
 
 
 def main() -> None:
