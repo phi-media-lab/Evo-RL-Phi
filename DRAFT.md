@@ -260,6 +260,8 @@ channel 维护当前目标 artifact：
 
 ### 9.0 当前进展快照
 
+本地端推理栈的专项完成度清单见 [EDGE_STACK_STATUS.md](./EDGE_STACK_STATUS.md)。
+
 截至当前代码实现，已经落地的入口和模块包括：
 
 - edge 执行入口：`src/lerobot/scripts/edge_run_local.py`

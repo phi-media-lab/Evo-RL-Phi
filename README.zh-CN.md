@@ -51,6 +51,7 @@ Evo-RL 是一个基于 LeRobot 的真实机器人强化学习代码库，当前�
 - 远程健康上报与生产审计链路
 
 详细实施计划和阶段状态见 [DRAFT.md](./DRAFT.md)。
+本地端推理栈完成度清单见 [EDGE_STACK_STATUS.md](./EDGE_STACK_STATUS.md)。
 
 ## 仓库结构
 

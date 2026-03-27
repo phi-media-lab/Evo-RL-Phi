@@ -51,6 +51,7 @@ Not implemented yet:
 - remote health reporting and production audit pipeline
 
 Detailed project plan and phase tracking live in [DRAFT.md](./DRAFT.md).
+Current edge runtime completion status lives in [EDGE_STACK_STATUS.md](./EDGE_STACK_STATUS.md).
 
 ## Repository Shape
 
