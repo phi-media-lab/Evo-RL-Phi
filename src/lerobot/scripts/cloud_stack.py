@@ -271,6 +271,7 @@ def run_cloud_stack(
             _write_status(runtime_root_path, status)
             guard = stop_event or threading.Event()
             while not guard.is_set():
+                _refresh_status_from_runtime(runtime_root_path, status)
                 sleep_fn(idle_sleep_s)
         return output
     except Exception as exc:
@@ -291,6 +292,19 @@ def _write_status(runtime_root: Path, status: CloudStackRuntimeStatus) -> None:
     with (runtime_root / "cloud_stack_status.json").open("w", encoding="utf-8") as handle:
         json.dump(status.to_dict(), handle, indent=2, sort_keys=True)
         handle.write("\n")
+
+
+def _refresh_status_from_runtime(runtime_root: Path, status: CloudStackRuntimeStatus) -> None:
+    latest_path = runtime_root / "latest.json"
+    metrics_path = runtime_root / "metrics.json"
+    if latest_path.exists():
+        latest_payload = json.loads(latest_path.read_text(encoding="utf-8"))
+        status.latest_action = latest_payload.get("action")
+        status.latest_artifact_id = latest_payload.get("artifact_id")
+        status.latest_path = str(latest_path)
+    if metrics_path.exists():
+        status.metrics_path = str(metrics_path)
+    _write_status(runtime_root, status)
 
 
 def main() -> None:

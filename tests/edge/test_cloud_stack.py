@@ -168,12 +168,20 @@ def test_cloud_stack_keep_alive_preserves_status_endpoint_after_release(tmp_path
 
     status_payload = json.loads(status_path.read_text(encoding="utf-8"))
     status_base_url = status_payload["endpoints"]["status_base_url"]
-    with urllib_request.urlopen(f"{status_base_url}/status") as response:
-        runtime_payload = json.loads(response.read().decode("utf-8"))
+    runtime_payload = None
+    for _ in range(200):
+        with urllib_request.urlopen(f"{status_base_url}/status") as response:
+            runtime_payload = json.loads(response.read().decode("utf-8"))
+        if runtime_payload["phase"] == "serving":
+            break
 
     assert thread.is_alive()
+    assert runtime_payload is not None
     assert runtime_payload["phase"] == "serving"
     assert runtime_payload["latest_action"] == "released"
+    assert runtime_payload["latest_artifact_id"] is not None
+    assert runtime_payload["latest_path"] == str(latest_path)
+    assert runtime_payload["metrics_path"] == str(tmp_path / "controller_runtime" / "metrics.json")
 
     stop_event.set()
     thread.join(timeout=10)
