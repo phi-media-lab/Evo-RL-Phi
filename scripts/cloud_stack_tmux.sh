@@ -7,6 +7,7 @@ SESSION_NAME="${SESSION_NAME:-evorl-cloud-stack}"
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace}"
 REPO_DIR="${REPO_DIR:-$WORKSPACE_ROOT/Evo-RL}"
 ENV_NAME="${ENV_NAME:-lerobot}"
+PYTHON_BIN="${PYTHON_BIN:-}"
 
 HOST="${HOST:-127.0.0.1}"
 INGESTION_PORT="${INGESTION_PORT:-8000}"
@@ -38,13 +39,17 @@ if ! command -v tmux >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ -n "$PYTHON_BIN" ]; then
+  LAUNCH_PREFIX="\"$PYTHON_BIN\" -m lerobot.scripts.cloud_stack"
+else
+  LAUNCH_PREFIX="source \"\$(conda info --base)/etc/profile.d/conda.sh\" && conda activate \"$ENV_NAME\" && python -m lerobot.scripts.cloud_stack"
+fi
+
 STACK_CMD=$(
   cat <<EOF
 cd "$REPO_DIR"
 if [ -f "$WORKSPACE_ROOT/runpod_env.sh" ]; then source "$WORKSPACE_ROOT/runpod_env.sh"; fi
-source "\$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$ENV_NAME"
-python -m lerobot.scripts.cloud_stack \
+$LAUNCH_PREFIX \
   --host "$HOST" \
   --ingestion-port "$INGESTION_PORT" \
   --materializer-port "$MATERIALIZER_PORT" \
