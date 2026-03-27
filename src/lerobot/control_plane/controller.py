@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from .artifact import ArtifactManifest
+from .incidents import IncidentAggregator
 from .registry import ReleaseRegistry
+from .rollout import RolloutStatusBuilder, RolloutStatusStore
 
 
 @dataclass(frozen=True)
@@ -57,3 +59,20 @@ class ReleaseController:
             registry_root=str(self.registry.layout.root),
             rollout_reason=rollout_reason,
         )
+
+    def write_rollout_report(
+        self,
+        *,
+        incident_root: str | Path,
+        report_root: str | Path,
+        report_filename: str = "rollout_status.json",
+        device_state_roots: dict[str, str | Path] | None = None,
+    ) -> Path:
+        aggregator = IncidentAggregator(Path(incident_root), self.registry)
+        builder = RolloutStatusBuilder(
+            registry=self.registry,
+            incident_aggregator=aggregator,
+            device_state_roots=device_state_roots,
+        )
+        report = builder.build_report()
+        return RolloutStatusStore(report_root).write_report(report, filename=report_filename)
