@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import threading
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from lerobot.cloud.ingestion import EpisodeIngestionHTTPServer, FilesystemEpisodeIngestionStore
 from lerobot.cloud.materializer import MaterializerHTTPServer
@@ -15,6 +19,53 @@ from lerobot.scripts.control_plane_auto_release_daemon import run_auto_release_d
 class CloudServiceEndpoints:
     ingestion_base_url: str
     materializer_base_url: str
+
+
+@dataclass
+class CloudStackRuntimeStatus:
+    phase: str = "starting"
+    runtime_root: str | None = None
+    endpoints: dict[str, str] = field(default_factory=dict)
+    latest_action: str | None = None
+    latest_artifact_id: str | None = None
+    metrics_path: str | None = None
+    latest_path: str | None = None
+    last_error: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+class CloudStackStatusHTTPRequestHandler(BaseHTTPRequestHandler):
+    server: "CloudStackStatusHTTPServer"
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/healthz":
+            status = self.server.state.to_dict()
+            code = HTTPStatus.OK if status["phase"] != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+            self._write_json(code, {"ok": code == HTTPStatus.OK, "phase": status["phase"]})
+            return
+        if self.path == "/status":
+            self._write_json(HTTPStatus.OK, self.server.state.to_dict())
+            return
+        self._write_json(HTTPStatus.NOT_FOUND, {"error": f"Unsupported path: {self.path}"})
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+    def _write_json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
+        body = json.dumps(payload, sort_keys=True).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class CloudStackStatusHTTPServer(ThreadingHTTPServer):
+    def __init__(self, server_address: tuple[str, int], state: CloudStackRuntimeStatus):
+        self.state = state
+        super().__init__(server_address, CloudStackStatusHTTPRequestHandler)
 
 
 class CloudServiceGroup:
@@ -72,6 +123,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--ingestion-port", type=int, default=8000)
     parser.add_argument("--materializer-port", type=int, default=8001)
+    parser.add_argument("--status-port", type=int, default=8002)
     parser.add_argument("--ingestion-root", required=True)
     parser.add_argument("--materialized-root", required=True)
     parser.add_argument("--dataset-root", required=True)
@@ -115,6 +167,7 @@ def run_cloud_stack(
     host: str,
     ingestion_port: int,
     materializer_port: int,
+    status_port: int | None,
     ingestion_root: str,
     materialized_root: str,
     dataset_root: str,
@@ -141,6 +194,9 @@ def run_cloud_stack(
     poll_interval_s: float = 5.0,
     max_iterations: int | None = None,
 ) -> str:
+    runtime_root_path = Path(runtime_root)
+    runtime_root_path.mkdir(parents=True, exist_ok=True)
+    status = CloudStackRuntimeStatus(phase="starting", runtime_root=str(runtime_root_path))
     services = CloudServiceGroup(
         host=host,
         ingestion_port=ingestion_port,
@@ -149,9 +205,23 @@ def run_cloud_stack(
         materialized_root=materialized_root,
         dataset_root=dataset_root,
     )
+    status_server = None if status_port is None else CloudStackStatusHTTPServer((host, status_port), status)
+    status_thread = None
+    if status_server is not None:
+        status_thread = threading.Thread(target=status_server.serve_forever, daemon=True)
+        status_thread.start()
     endpoints = services.start()
+    status.endpoints = {
+        "ingestion_base_url": endpoints.ingestion_base_url,
+        "materializer_base_url": endpoints.materializer_base_url,
+    }
+    if status_server is not None:
+        status.endpoints["status_base_url"] = f"http://{host}:{status_server.server_port}"
+    _write_status(runtime_root_path, status)
+    status.phase = "running"
+    _write_status(runtime_root_path, status)
     try:
-        return run_auto_release_daemon(
+        output = run_auto_release_daemon(
             materialized_root=materialized_root,
             train_output_root=train_output_root,
             artifact_output_root=artifact_output_root,
@@ -177,8 +247,36 @@ def run_cloud_stack(
             poll_interval_s=poll_interval_s,
             max_iterations=max_iterations,
         )
+        latest_path = runtime_root_path / "latest.json"
+        metrics_path = runtime_root_path / "metrics.json"
+        if latest_path.exists():
+            latest_payload = json.loads(latest_path.read_text(encoding="utf-8"))
+            status.latest_action = latest_payload.get("action")
+            status.latest_artifact_id = latest_payload.get("artifact_id")
+            status.latest_path = str(latest_path)
+        if metrics_path.exists():
+            status.metrics_path = str(metrics_path)
+        status.phase = "completed"
+        _write_status(runtime_root_path, status)
+        return output
+    except Exception as exc:
+        status.phase = "failed"
+        status.last_error = str(exc)
+        _write_status(runtime_root_path, status)
+        raise
     finally:
         services.close()
+        if status_server is not None:
+            status_server.shutdown()
+            status_server.server_close()
+            if status_thread is not None:
+                status_thread.join(timeout=2)
+
+
+def _write_status(runtime_root: Path, status: CloudStackRuntimeStatus) -> None:
+    with (runtime_root / "cloud_stack_status.json").open("w", encoding="utf-8") as handle:
+        json.dump(status.to_dict(), handle, indent=2, sort_keys=True)
+        handle.write("\n")
 
 
 def main() -> None:
@@ -187,6 +285,7 @@ def main() -> None:
         host=args.host,
         ingestion_port=args.ingestion_port,
         materializer_port=args.materializer_port,
+        status_port=args.status_port,
         ingestion_root=args.ingestion_root,
         materialized_root=args.materialized_root,
         dataset_root=args.dataset_root,
