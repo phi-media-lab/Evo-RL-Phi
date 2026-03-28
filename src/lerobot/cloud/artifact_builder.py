@@ -52,6 +52,39 @@ class ArtifactBuildRequest:
         return payload
 
 
+@dataclass(frozen=True)
+class OpenPIArtifactBuildRequest:
+    artifact_id: str
+    base_checkpoint: str
+    output_root: str | Path
+    compatible_robot_types: list[str]
+    compatible_camera_layouts: list[str]
+    policy_ref: str
+    runtime_backend: str
+    action_horizon: int
+    action_dim: int
+    observation_contract: dict[str, Any]
+    model_output_key: str = ""
+    output_transform: str = ""
+    runtime_metadata: dict[str, Any] = field(default_factory=dict)
+    runtime_assets_dir: str | Path | None = None
+    runtime_abi_version: str = "v1"
+    observation_schema_version: str = "v1"
+    action_schema_version: str = "v1"
+    env_processor_config: dict[str, Any] = field(default_factory=dict)
+    action_processor_config: dict[str, Any] = field(default_factory=dict)
+    eval_summary: dict[str, float] = field(default_factory=dict)
+    training_lineage: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["output_root"] = str(self.output_root)
+        if self.runtime_assets_dir is not None:
+            payload["runtime_assets_dir"] = str(self.runtime_assets_dir)
+        return payload
+
+
 class FilesystemArtifactBuilder:
     """Builds edge-compatible deployment artifacts from local pretrained policy directories."""
 
@@ -115,6 +148,79 @@ class FilesystemArtifactBuilder:
             raise FileNotFoundError(f"Stats path does not exist: {source_stats_path}")
         shutil.copy2(source_stats_path, stats_dest)
         return compute_sha256(stats_dest)
+
+    def _write_json(self, path: Path, payload: dict[str, Any]) -> None:
+        with path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+
+
+class FilesystemOpenPIArtifactBuilder:
+    """Builds edge-compatible OpenPI deployment artifacts."""
+
+    def build(self, request: OpenPIArtifactBuildRequest) -> Path:
+        output_root = Path(request.output_root)
+        artifact_root = output_root / request.artifact_id
+        if artifact_root.exists():
+            shutil.rmtree(artifact_root)
+        artifact_root.mkdir(parents=True, exist_ok=True)
+
+        policy_dir = artifact_root / "policy"
+        policy_dir.mkdir()
+        self._write_json(policy_dir / "config.json", {"type": "openpi"})
+
+        stats_path = artifact_root / "stats.json"
+        self._write_json(stats_path, {})
+
+        env_processor_path = artifact_root / "env_processor_config.json"
+        action_processor_path = artifact_root / "action_processor_config.json"
+        self._write_json(env_processor_path, request.env_processor_config)
+        self._write_json(action_processor_path, request.action_processor_config)
+
+        runtime_metadata = {
+            "backend": request.runtime_backend,
+            "policy_ref": request.policy_ref,
+            "action_horizon": request.action_horizon,
+            "action_dim": request.action_dim,
+            "model_output_key": request.model_output_key,
+            "output_transform": request.output_transform,
+        }
+        runtime_metadata.update(request.runtime_metadata)
+        if request.runtime_assets_dir is not None:
+            source_assets_dir = Path(request.runtime_assets_dir)
+            if not source_assets_dir.exists():
+                raise FileNotFoundError(f"Runtime assets directory does not exist: {source_assets_dir}")
+            copied_assets_dir = artifact_root / "runtime_assets"
+            shutil.copytree(source_assets_dir, copied_assets_dir)
+            runtime_metadata["runtime_assets_path"] = "runtime_assets"
+
+        manifest = ArtifactManifest(
+            artifact_id=request.artifact_id,
+            base_checkpoint=request.base_checkpoint,
+            runtime_abi_version=request.runtime_abi_version,
+            observation_schema_version=request.observation_schema_version,
+            action_schema_version=request.action_schema_version,
+            env_processor_digest=compute_sha256(env_processor_path),
+            action_processor_digest=compute_sha256(action_processor_path),
+            stats_digest=compute_sha256(stats_path),
+            policy_digest=compute_tree_digest(policy_dir),
+            compatible_robot_types=request.compatible_robot_types,
+            compatible_camera_layouts=request.compatible_camera_layouts,
+            eval_summary=request.eval_summary,
+            policy_config={"type": "openpi"},
+            env_processor_config=request.env_processor_config,
+            action_processor_config=request.action_processor_config,
+            training_lineage=request.training_lineage,
+            metadata={
+                **request.metadata,
+                "policy_path": "policy",
+                "runtime": runtime_metadata,
+                "observation_contract": request.observation_contract,
+            },
+        )
+        manifest.write_json(artifact_root / "manifest.json")
+        self._write_json(artifact_root / "build_request.json", request.to_dict())
+        return artifact_root
 
     def _write_json(self, path: Path, payload: dict[str, Any]) -> None:
         with path.open("w", encoding="utf-8") as handle:

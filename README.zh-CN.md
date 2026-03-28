@@ -52,6 +52,7 @@ Evo-RL 是一个基于 LeRobot 的真实机器人强化学习代码库，当前�
 
 详细实施计划和阶段状态见 [DRAFT.md](./DRAFT.md)。
 本地端推理栈完成度清单见 [EDGE_STACK_STATUS.md](./EDGE_STACK_STATUS.md)。
+OpenPI 本地运行封装与迁移说明见 [OPENPI_LOCAL_RUNTIME.md](./OPENPI_LOCAL_RUNTIME.md)。
 
 ## 仓库结构
 

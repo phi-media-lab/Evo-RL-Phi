@@ -7,7 +7,12 @@ from .ingestion import (
     FilesystemEpisodeIngestionStore,
     HTTPEpisodeIngestionClient,
 )
-from .artifact_builder import ArtifactBuildRequest, FilesystemArtifactBuilder
+from .artifact_builder import (
+    ArtifactBuildRequest,
+    FilesystemArtifactBuilder,
+    FilesystemOpenPIArtifactBuilder,
+    OpenPIArtifactBuildRequest,
+)
 from .materializer import (
     FilesystemEpisodeMaterializer,
     HTTPMaterializerClient,
@@ -24,6 +29,8 @@ __all__ = [
     "HTTPEpisodeIngestionClient",
     "ArtifactBuildRequest",
     "FilesystemArtifactBuilder",
+    "OpenPIArtifactBuildRequest",
+    "FilesystemOpenPIArtifactBuilder",
     "FilesystemEpisodeMaterializer",
     "HTTPMaterializerClient",
     "MaterializedDatasetManifest",

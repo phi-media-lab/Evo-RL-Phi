@@ -52,6 +52,7 @@ Not implemented yet:
 
 Detailed project plan and phase tracking live in [DRAFT.md](./DRAFT.md).
 Current edge runtime completion status lives in [EDGE_STACK_STATUS.md](./EDGE_STACK_STATUS.md).
+OpenPI local runtime packaging and migration notes live in [OPENPI_LOCAL_RUNTIME.md](./OPENPI_LOCAL_RUNTIME.md).
 
 ## Repository Shape
 

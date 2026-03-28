@@ -18,7 +18,7 @@ from .incidents import EdgeIncidentRecord, FilesystemIncidentSink
 from .model_manager import EdgeCompatibilityContext, EdgeDeploymentSyncResult, EdgeModelManager
 from .processing import make_edge_processor_bundle
 from .runner import EdgeRobotRunner
-from .runtime import LocalPolicyRuntime
+from .runtime_protocol import EdgePolicyRuntime
 from .spool import EdgeEpisodeSpool
 from .uploader import EdgeEpisodeUploader, EdgeUploaderConfig
 
@@ -61,7 +61,7 @@ class EdgeDeploymentLoop:
         self,
         *,
         robot: Robot,
-        runtime: Any,
+        runtime: EdgePolicyRuntime,
         spool: EdgeEpisodeSpool,
         model_manager: EdgeModelManager,
         registry: ReleaseRegistry | None,
@@ -125,7 +125,7 @@ class EdgeDeploymentLoop:
                 if artifact is not None:
                     self.model_manager.stage_artifact(artifact, self.compatibility)
                     policy_artifact_id = artifact.manifest.artifact_id
-                    if isinstance(self.runtime, LocalPolicyRuntime):
+                    if self.model_manager.supports_runtime(self.runtime):
                         self.runtime = self.model_manager.activate_artifact(
                             artifact,
                             runtime_overrides={
@@ -210,7 +210,7 @@ class EdgeDeploymentLoop:
             device_id=self.loop_cfg.device_id,
             context=self.compatibility,
             fallback_channel=self.loop_cfg.channel,
-            activate=isinstance(self.runtime, LocalPolicyRuntime),
+            activate=self.model_manager.supports_runtime(self.runtime),
             runtime_overrides={
                 "device": self.runtime_device,
                 "task": self.loop_cfg.task_id,
@@ -226,7 +226,7 @@ class EdgeDeploymentLoop:
             return "ignored"
         if incident.action != "rollback_or_safe_stop":
             return "ignored"
-        if not isinstance(self.runtime, LocalPolicyRuntime):
+        if not self.model_manager.supports_runtime(self.runtime):
             return "safe_stop"
 
         try:

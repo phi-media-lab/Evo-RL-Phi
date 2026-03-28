@@ -14,7 +14,7 @@ from lerobot.robots.robot import Robot
 from .contracts import EdgeRuntimeContract, default_edge_runtime_contract
 from .episode import EdgeEpisodeRecord
 from .recorder import EdgeEpisodeRecorder
-from .runtime import LocalPolicyRuntime
+from .runtime_protocol import EdgePolicyRuntime
 from .spool import EdgeEpisodeSpool
 from .watchdog import EdgeWatchdog, WatchdogIncident
 
@@ -35,7 +35,7 @@ class EdgeRobotRunner:
         self,
         *,
         robot: Robot,
-        runtime: LocalPolicyRuntime,
+        runtime: EdgePolicyRuntime,
         spool: EdgeEpisodeSpool,
         policy_artifact_id: str,
         processor_bundle_id: str,
@@ -103,6 +103,9 @@ class EdgeRobotRunner:
                 info["complementary_data"] = complementary_data
             info["runtime_inference_ms"] = inference_duration_ms
             info["runtime_queue_size"] = self.runtime.queue_size
+            runtime_stage_info = getattr(self.runtime, "last_runtime_info", None)
+            if isinstance(runtime_stage_info, dict):
+                info.update(runtime_stage_info)
 
             done_local = bool(processed_transition.get(TransitionKey.DONE, False))
             recorder.append_step(

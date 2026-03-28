@@ -16,6 +16,8 @@ from lerobot.policies.factory import get_policy_class, make_pre_post_processors
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.processor import PolicyAction, PolicyProcessorPipeline
 
+from .runtime_protocol import EdgePolicyRuntime
+
 
 @dataclass
 class LocalPolicyRuntimeConfig:
@@ -174,3 +176,21 @@ class LocalPolicyRuntime:
             processed_action = self.postprocessor(action)
             processed_actions.append(processed_action.detach().cpu())
         return torch.stack(processed_actions, dim=1).squeeze(0)
+
+
+class LocalPolicyRuntimeFactory:
+    runtime_config_type = LocalPolicyRuntimeConfig
+
+    def build_runtime(
+        self,
+        runtime_config: LocalPolicyRuntimeConfig,
+        *,
+        warmup_observation: dict[str, Any] | None = None,
+    ) -> EdgePolicyRuntime:
+        runtime = LocalPolicyRuntime(runtime_config)
+        if warmup_observation is not None:
+            runtime.warmup(warmup_observation)
+        return runtime
+
+    def supports_runtime(self, runtime: EdgePolicyRuntime) -> bool:
+        return isinstance(runtime, LocalPolicyRuntime)

@@ -10,7 +10,21 @@ from typing import Any
 from lerobot.control_plane.artifact import ArtifactManifest
 from lerobot.control_plane.registry import ReleaseRegistry
 
-from .runtime import LocalPolicyRuntime, LocalPolicyRuntimeConfig
+from .openpi_loader import resolve_openpi_policy_ref
+from .openpi_runtime import (
+    CompositeEdgeRuntimeFactory,
+    OpenPICoreMLRuntimeConfig,
+    OpenPICoreMLRuntimeFactory,
+    OpenPIHybridBridgeRuntimeFactory,
+    OpenPIInProcessRuntimeFactory,
+    OpenPIInProcessRuntimeConfig,
+    OpenPIHybridBridgeRuntimeConfig,
+    OpenPIObservationAdapterConfig,
+    OpenPIWebsocketRuntimeConfig,
+    OpenPIWebsocketRuntimeFactory,
+)
+from .runtime import LocalPolicyRuntimeConfig, LocalPolicyRuntimeFactory
+from .runtime_protocol import EdgePolicyRuntime, EdgeRuntimeFactory
 
 
 @dataclass(frozen=True)
@@ -51,16 +65,23 @@ class EdgeDeploymentSyncResult:
     channel: str
     target_artifact_id: str
     changed: bool
-    runtime: LocalPolicyRuntime | None = None
+    runtime: EdgePolicyRuntime | None = None
 
 
 class EdgeModelManager:
     """Minimal local model manager for artifact validation, staging, activation, and rollback."""
 
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, runtime_factory: EdgeRuntimeFactory | None = None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.state_path = self.root / "state.json"
+        self.runtime_factory = runtime_factory or CompositeEdgeRuntimeFactory(
+            LocalPolicyRuntimeFactory(),
+            OpenPIInProcessRuntimeFactory(resolve_openpi_policy_ref),
+            OpenPIWebsocketRuntimeFactory(),
+            OpenPICoreMLRuntimeFactory(),
+            OpenPIHybridBridgeRuntimeFactory(),
+        )
         self.state = self._load_state()
 
     def discover_artifact_dirs(self) -> list[Path]:
@@ -111,6 +132,12 @@ class EdgeModelManager:
             errors.append(f"camera layout '{context.camera_layout}' not allowed by artifact.")
         if not artifact.policy_path.exists():
             errors.append(f"policy path does not exist: {artifact.policy_path}")
+        runtime_metadata = manifest.metadata.get("runtime", {})
+        runtime_assets_path = runtime_metadata.get("runtime_assets_path")
+        if runtime_assets_path:
+            resolved_runtime_assets_path = artifact.root / runtime_assets_path
+            if not resolved_runtime_assets_path.exists():
+                errors.append(f"runtime assets path does not exist: {resolved_runtime_assets_path}")
 
         return errors
 
@@ -127,11 +154,12 @@ class EdgeModelManager:
         *,
         runtime_overrides: dict[str, Any] | None = None,
         warmup_observation: dict[str, Any] | None = None,
-    ) -> LocalPolicyRuntime:
+    ) -> EdgePolicyRuntime:
         runtime_config = self.build_runtime_config(artifact, overrides=runtime_overrides)
-        runtime = LocalPolicyRuntime(runtime_config)
-        if warmup_observation is not None:
-            runtime.warmup(warmup_observation)
+        runtime = self.runtime_factory.build_runtime(
+            runtime_config,
+            warmup_observation=warmup_observation,
+        )
 
         if self.state.active_artifact_id != artifact.manifest.artifact_id:
             self.state.previous_active_artifact_id = self.state.active_artifact_id
@@ -147,7 +175,7 @@ class EdgeModelManager:
         *,
         runtime_overrides: dict[str, Any] | None = None,
         warmup_observation: dict[str, Any] | None = None,
-    ) -> LocalPolicyRuntime:
+    ) -> EdgePolicyRuntime:
         self.state.pending_artifact_id = None
         self._write_state()
         return self.activate_artifact(
@@ -160,10 +188,92 @@ class EdgeModelManager:
         self,
         artifact: ManagedArtifact,
         overrides: dict[str, Any] | None = None,
-    ) -> LocalPolicyRuntimeConfig:
+    ) -> Any:
         policy_type = artifact.manifest.policy_config.get("type")
         if policy_type is None:
             raise ValueError("Artifact manifest missing policy_config.type")
+
+        runtime_metadata = dict(artifact.manifest.metadata.get("runtime", {}))
+        if overrides is not None:
+            runtime_metadata.update(overrides)
+
+        if policy_type == "openpi":
+            backend = runtime_metadata.get("backend")
+            observation_contract = artifact.manifest.metadata.get("observation_contract", {})
+            observation = OpenPIObservationAdapterConfig(
+                mode=observation_contract.get("mode", "flat_state"),
+                state_keys=list(observation_contract.get("state_keys", [])),
+                state_key=observation_contract.get("state_key", ""),
+                state_start_index=observation_contract.get("state_start_index", 0),
+                state_dim=observation_contract.get("state_dim"),
+                image_keys=list(observation_contract.get("image_keys", [])),
+                prompt=observation_contract.get("prompt", ""),
+                prompt_key=observation_contract.get("prompt_key", ""),
+                image_aliases=dict(observation_contract.get("image_aliases", {})),
+                drop_batch_dim=observation_contract.get("drop_batch_dim", True),
+                transpose_images_to_chw=observation_contract.get("transpose_images_to_chw", False),
+            )
+            if backend == "websocket":
+                return OpenPIWebsocketRuntimeConfig(
+                    server_uri=runtime_metadata["server_uri"],
+                    action_horizon=runtime_metadata["action_horizon"],
+                    action_dim=runtime_metadata["action_dim"],
+                    openpi_client_root=runtime_metadata.get("openpi_client_root", ""),
+                    observation=observation,
+                )
+            if backend == "in_process":
+                return OpenPIInProcessRuntimeConfig(
+                    action_horizon=runtime_metadata["action_horizon"],
+                    action_dim=runtime_metadata["action_dim"],
+                    policy_ref=runtime_metadata["policy_ref"],
+                    observation=observation,
+                )
+            if backend == "coreml":
+                model_path = runtime_metadata.get("model_path")
+                runtime_assets_path = runtime_metadata.get("runtime_assets_path")
+                if model_path is None and runtime_assets_path is not None:
+                    runtime_assets_root = artifact.root / runtime_assets_path
+                    model_path = str(self._resolve_single_runtime_asset(runtime_assets_root, "*.mlpackage"))
+                return OpenPICoreMLRuntimeConfig(
+                    model_path=model_path,
+                    action_horizon=runtime_metadata["action_horizon"],
+                    action_dim=runtime_metadata["action_dim"],
+                    observation=observation,
+                    model_output_key=runtime_metadata.get("model_output_key", ""),
+                    output_transform=runtime_metadata.get("output_transform", ""),
+                    compute_unit=runtime_metadata.get("compute_unit", "cpu_and_ne"),
+                    openpi_repo_root=runtime_metadata.get("openpi_repo_root", ""),
+                )
+            if backend == "hybrid_bridge_v1":
+                model_path = runtime_metadata.get("model_path")
+                feed_contract_path = runtime_metadata.get("feed_contract_path", "")
+                runtime_assets_path = runtime_metadata.get("runtime_assets_path")
+                if runtime_assets_path is not None:
+                    runtime_assets_root = artifact.root / runtime_assets_path
+                    if model_path is None:
+                        model_path = str(self._resolve_single_runtime_asset(runtime_assets_root, "*.mlpackage"))
+                    if not feed_contract_path:
+                        feed_contract_candidates = sorted(runtime_assets_root.glob("*feed_contract*.json"))
+                        if len(feed_contract_candidates) == 1:
+                            feed_contract_path = str(feed_contract_candidates[0])
+                return OpenPIHybridBridgeRuntimeConfig(
+                    model_path=model_path,
+                    bridge_mode=runtime_metadata["bridge_mode"],
+                    action_horizon=runtime_metadata["action_horizon"],
+                    action_dim=runtime_metadata["action_dim"],
+                    observation=observation,
+                    model_output_key=runtime_metadata.get("model_output_key", ""),
+                    output_transform=runtime_metadata.get("output_transform", ""),
+                    feed_contract_path=feed_contract_path,
+                    prefix_mode=runtime_metadata.get("prefix_mode", ""),
+                    compute_unit=runtime_metadata.get("compute_unit", "cpu_and_ne"),
+                    openpi_repo_root=runtime_metadata.get("openpi_repo_root", ""),
+                    config_name=runtime_metadata.get("config_name", ""),
+                    checkpoint_dir=runtime_metadata.get("checkpoint_dir", ""),
+                    export_precision=runtime_metadata.get("export_precision", "float16"),
+                    device=runtime_metadata.get("device", "cpu"),
+                )
+            raise ValueError(f"Unsupported openpi runtime backend: {backend}")
 
         runtime_kwargs: dict[str, Any] = {
             "policy_type": policy_type,
@@ -175,10 +285,16 @@ class EdgeModelManager:
             runtime_kwargs["preprocessor_config_filename"] = artifact.preprocessor_config_filename
         if artifact.postprocessor_config_filename is not None:
             runtime_kwargs["postprocessor_config_filename"] = artifact.postprocessor_config_filename
-        runtime_kwargs.update(artifact.manifest.metadata.get("runtime", {}))
-        if overrides is not None:
-            runtime_kwargs.update(overrides)
+        runtime_kwargs.update(runtime_metadata)
         return LocalPolicyRuntimeConfig(**runtime_kwargs)
+
+    def _resolve_single_runtime_asset(self, runtime_assets_root: Path, pattern: str) -> Path:
+        candidates = sorted(runtime_assets_root.glob(pattern))
+        if len(candidates) != 1:
+            raise FileNotFoundError(
+                f"Expected exactly one runtime asset matching {pattern} under {runtime_assets_root}, got {len(candidates)}"
+            )
+        return candidates[0]
 
     def get_active_artifact_id(self) -> str | None:
         return self.state.active_artifact_id
@@ -248,7 +364,7 @@ class EdgeModelManager:
         *,
         runtime_overrides: dict[str, Any] | None = None,
         warmup_observation: dict[str, Any] | None = None,
-    ) -> LocalPolicyRuntime:
+    ) -> EdgePolicyRuntime:
         previous_active_artifact_id = self.state.previous_active_artifact_id
         if previous_active_artifact_id is None:
             raise ValueError("No previous active artifact available for rollback.")
@@ -261,6 +377,9 @@ class EdgeModelManager:
         self.state.pending_artifact_id = None
         self._write_state()
         return runtime
+
+    def supports_runtime(self, runtime: EdgePolicyRuntime) -> bool:
+        return self.runtime_factory.supports_runtime(runtime)
 
     def _load_state(self) -> EdgeModelManagerState:
         if not self.state_path.exists():
