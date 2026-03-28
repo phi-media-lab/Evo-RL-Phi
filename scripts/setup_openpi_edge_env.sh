@@ -56,7 +56,7 @@ python -m pip install \
   mlx-metal
 
 python -m pip install -e "$OPENPI_REPO_ROOT/packages/openpi-client"
-python -m pip install -e "$OPENPI_REPO_ROOT"
+python -m pip install -e "$OPENPI_REPO_ROOT" --no-deps
 
 PATCH_SRC="$OPENPI_REPO_ROOT/src/openpi/models_pytorch/transformers_replace"
 OPENPI_TRANSFORMERS_SITE_PACKAGES="$(python - <<'PY'
