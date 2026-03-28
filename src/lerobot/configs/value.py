@@ -9,6 +9,7 @@ from typing import Any
 
 import draccus
 
+from lerobot.datasets.video_utils import get_safe_default_codec
 from lerobot.utils.recording_annotations import normalize_episode_success_label
 
 
@@ -19,6 +20,7 @@ class ValueInferenceDatasetConfig:
     episodes: list[int] | None = None
     revision: str | None = None
     download_videos: bool = True
+    video_backend: str = field(default_factory=get_safe_default_codec)
     success_field: str = "episode_success"
     default_success: str = "failure"
 

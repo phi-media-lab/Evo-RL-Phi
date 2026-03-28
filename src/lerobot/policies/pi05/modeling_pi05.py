@@ -573,15 +573,20 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
             # Also compile the main forward pass used during training
             self.forward = torch.compile(self.forward, mode=config.compile_mode)
 
-        msg = """An incorrect transformer version is used, please create an issue on https://github.com/huggingface/lerobot/issues"""
-
+        # Older/newer transformers builds may not expose the optional SigLIP integrity helper.
+        # Only enforce the check when the helper is available.
         try:
             from transformers.models.siglip import check
+        except ImportError:
+            check = None
 
+        if check is not None:
+            msg = (
+                "An incorrect transformers SigLIP patch version is installed. "
+                "Please create an issue on https://github.com/huggingface/lerobot/issues"
+            )
             if not check.check_whether_transformers_replace_is_installed_correctly():
                 raise ValueError(msg)
-        except ImportError:
-            raise ValueError(msg) from None
 
     def gradient_checkpointing_enable(self):
         """Enable gradient checkpointing for memory optimization."""
@@ -1098,6 +1103,16 @@ class PI05Policy(PreTrainedPolicy):
                 logging.warning(f"Vision embedding key might need handling: {key}")
 
             fixed_state_dict[new_key] = value
+
+        # Some exported checkpoints only store the tied lm_head weights for the
+        # PaliGemma language model. Mirror them onto embed_tokens so the model can
+        # run inference without leaving the embedding table randomly initialized.
+        paligemma_lm_head_key = "paligemma_with_expert.paligemma.lm_head.weight"
+        paligemma_embed_key = (
+            "paligemma_with_expert.paligemma.model.language_model.embed_tokens.weight"
+        )
+        if paligemma_embed_key not in fixed_state_dict and paligemma_lm_head_key in fixed_state_dict:
+            fixed_state_dict[paligemma_embed_key] = fixed_state_dict[paligemma_lm_head_key]
 
         return fixed_state_dict
 
