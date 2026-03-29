@@ -7,54 +7,30 @@
 
 <p align="center"><strong>Real-world RL workflows on top of LeRobot, with a validated ROCm + MI300X + pi05 ACP path.</strong></p>
 
-## What This Repo Is
+This branch is focused on one thing: a single-repo ROCm + MI300X + `pi05` ACP workflow that can be cloned, bootstrapped, validated, and run from this repository alone.
 
-`Evo-RL` is a LeRobot-based codebase for real-world robot learning. The repository currently focuses on:
+Validated on this branch:
 
-- offline RL and iterative improvement workflows for real robots
-- SO101 and AgileX PiPER / PiPER-X hardware support
-- value training, value inference, ACP-tagged policy training, and rollout collection
-- a single-repo ROCm deployment path for `pi05` on MI300X
-
-This branch is organized so a new MI300X cloud machine can start from this repository alone, instead of depending on an external hackathon repo or local path conventions.
-
-## What Is Validated On This Branch
-
-The `pi05-rocm-acp` branch has already been validated for the ROCm + `pi05` ACP workflow on MI300X-class hardware:
-
-- fresh clone of this repo
-- bootstrap of a local `.venvs/pi05-openpi-ssp`
+- fresh clone + bootstrap into `.venvs/pi05-openpi-ssp`
 - OpenPI-patched `transformers==4.53.2`
 - `pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py`
-- `pi05` ACP smoke workflow:
-  - `value train`
-  - `value infer`
-  - `policy train`
-- staged reruns up to `stage3` / `500` training steps
+- `pi05` ACP smoke workflow
+- staged reruns up to `stage3` / `500` steps
 
-Operational constraints for the validated path:
+Required for the validated path:
 
 - ROCm-capable MI300X machine
 - Hugging Face access to `google/paligemma-3b-pt-224`
-- `pyav` as the video backend
-- dataset-compatible cache or first-download access
+- `pyav` video backend
+- dataset access or local cache
 
-## Start Here
+<a id="quick-start"></a>
 
-Choose one path.
+## ⚡ Quick Start
 
-| Goal | Entry |
-| --- | --- |
-| Bring up a fresh cloud MI300X instance | [`scripts/setup/bootstrap_runpod_mi300x.sh`](./scripts/setup/bootstrap_runpod_mi300x.sh) |
-| Install into an existing ROCm machine | [`scripts/setup/setup_rocm_pi05.sh`](./scripts/setup/setup_rocm_pi05.sh) |
-| Read the MI300X workflow overview | [`docs/source/pi05_acp_mi300x.mdx`](./docs/source/pi05_acp_mi300x.mdx) |
-| Follow the shortest cloud setup path | [`docs/source/pi05_acp_runpod_quickstart.mdx`](./docs/source/pi05_acp_runpod_quickstart.mdx) |
-| Run the minimal end-to-end check | [`scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh`](./scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh) |
-| Re-run the full staged validation | [`scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh`](./scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh) |
+### MI300X / `pi05` ACP
 
-## Fastest Path
-
-Fresh MI300X cloud instance:
+Fastest path on a fresh MI300X instance:
 
 ```bash
 git clone https://github.com/phi-media-lab/Evo-RL-Phi.git
@@ -66,76 +42,24 @@ pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi0
 bash scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh
 ```
 
-If you want the staged workflow after smoke:
-
-```bash
-bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
-```
-
-## Repo Map
-
-- `scripts/setup/`
-  - ROCm environment bootstrap and OpenPI patching
-- `scripts/experiments/pi05_acp/`
-  - smoke, pilot, stage1, stage2, stage3, and full rerun scripts
-- `docs/source/pi05_acp_mi300x.mdx`
-  - single-repo workflow overview
-- `docs/source/pi05_acp_runpod_quickstart.mdx`
-  - shortest cloud setup path
-- `docs/source/pi05_acp/`
-  - execution plan, runbook, experiment report
-- `src/lerobot/`
-  - core training, policy, value, robot, and environment code
-
-## Table of Contents
-
-| Getting Started | Training Pipeline | Project Info |
-| --- | --- | --- |
-| [Quick Start](#quick-start) | [4) Value Function Training](#value-function-training) | [Model & Dataset](#model--dataset) |
-| [1) Installation](#installation) | [5) Value Inference](#value-inference) | [Community Channels](#community-channels) |
-| [2) Hardware Setup](#hardware-setup) | [6) Policy Training](#policy-training) | [Affiliations](#affiliations) |
-| [3) Data Collection](#data-collection) | [7) Closed-loop Rollout and Next Round](#closed-loop-rollout-and-next-round) | [Citation](#citation) / [License](#license) |
-
-<a id="quick-start"></a>
-
-## ⚡ Quick Start
-
-This repository is built on top of LeRobot and extends it for real-world RL workflows.
-
-### MI300X / `pi05` ACP
-
-For the ROCm + MI300X + `pi05` ACP workflow, this repository is the only required entrypoint.
-
-Primary docs and scripts:
-
-- `docs/source/pi05_acp_mi300x.mdx`
-- `docs/source/pi05_acp_runpod_quickstart.mdx`
-- `scripts/setup/bootstrap_runpod_mi300x.sh`
-- `scripts/setup/setup_rocm_pi05.sh`
-- `scripts/experiments/pi05_acp/`
-
-Validation command:
-
-```bash
-pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
-```
-
-Minimal end-to-end run:
-
-```bash
-bash scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh
-```
-
 Full staged rerun:
 
 ```bash
 bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
 ```
 
-Fresh MI300X cloud bootstrap:
+Primary entrypoints:
+
+- [`scripts/setup/bootstrap_runpod_mi300x.sh`](./scripts/setup/bootstrap_runpod_mi300x.sh)
+- [`scripts/setup/setup_rocm_pi05.sh`](./scripts/setup/setup_rocm_pi05.sh)
+- [`scripts/experiments/pi05_acp/`](./scripts/experiments/pi05_acp)
+- [`docs/source/pi05_acp_mi300x.mdx`](./docs/source/pi05_acp_mi300x.mdx)
+- [`docs/source/pi05_acp_runpod_quickstart.mdx`](./docs/source/pi05_acp_runpod_quickstart.mdx)
+
+Key validation command:
 
 ```bash
-bash scripts/setup/bootstrap_runpod_mi300x.sh
+pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
 ```
 
 <a id="installation"></a>
