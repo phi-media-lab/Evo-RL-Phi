@@ -1,0 +1,106 @@
+# RunPod MI300X Quick Start
+
+This page describes the minimal path to start from a fresh MI300X instance and run the `pi05` ACP workflow from this repository only.
+
+## 1. Clone Repositories
+
+Use `Evo-RL-Phi` as the single working codebase:
+
+```bash
+git clone https://github.com/phi-media-lab/Evo-RL-Phi.git
+cd Evo-RL-Phi
+```
+
+The current `pi05` setup still depends on OpenPI's patched `transformers`, so clone OpenPI next to this repository:
+
+```bash
+git clone --depth=1 --recurse-submodules https://github.com/Physical-Intelligence/openpi.git ../openpi
+```
+
+## 2. Prepare the PI05 ROCm Environment
+
+Run:
+
+```bash
+bash scripts/setup/setup_rocm_pi05.sh
+source .venvs/pi05-openpi-ssp/bin/activate
+```
+
+What this does:
+
+- creates `./.venvs/pi05-openpi-ssp`
+- installs `transformers==4.53.2`
+- installs this repository in editable mode
+- adds `/opt/venv/lib/python3.12/site-packages`
+- overlays OpenPI `transformers_replace`
+
+## 3. Authenticate Required Services
+
+Hugging Face gated model access is required:
+
+- `google/paligemma-3b-pt-224`
+
+Run:
+
+```bash
+hf auth login
+```
+
+Optional, only if you want online experiment tracking:
+
+```bash
+wandb login
+```
+
+## 4. Validate the Environment
+
+Check ROCm:
+
+```bash
+python - <<'PY'
+import torch
+print(torch.__version__)
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "no-gpu")
+PY
+```
+
+Check core `pi05` tests:
+
+```bash
+pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
+```
+
+Expected result on the validated machine:
+
+```text
+4 passed, 1 warning
+```
+
+## 5. Run the Workflow
+
+Smoke:
+
+```bash
+bash scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh
+```
+
+Full staged rerun:
+
+```bash
+bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
+```
+
+## 6. Important Defaults
+
+- video backend is forced to `pyav`
+- dataset default root can be overridden with `LEROBOT_DATASET_ROOT`
+- venv bin path can be overridden with `EVORL_VENV_BIN`
+- current dataset assumption remains `maxbeau/XLeRobot`
+
+## 7. Reference Pages
+
+- [PI05 ACP on MI300X](./pi05_acp_mi300x)
+- [Runbook](./pi05_acp/runbook)
+- [Execution Plan](./pi05_acp/execution_plan)
+- [Experiment Report](./pi05_acp/experiment_report)

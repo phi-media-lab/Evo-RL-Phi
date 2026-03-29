@@ -1,0 +1,86 @@
+# PI05 ACP on MI300X
+
+This page is the single-repo entrypoint for the ROCm + MI300X + `pi05` Evo-RL ACP workflow.
+
+## Scope
+
+The validated workflow in this repository covers:
+
+1. `pi05` inference on ROCm
+2. `pistar06` value training
+3. `lerobot-value-infer` ACP label writeback
+4. `pi05` ACP policy training
+5. staged reruns from `smoke` up to `stage3`
+
+## Canonical Paths
+
+Use this repository as the only codebase:
+
+```bash
+git clone https://github.com/phi-media-lab/Evo-RL-Phi.git
+cd Evo-RL-Phi
+```
+
+Experiment scripts now live in:
+
+```text
+scripts/experiments/pi05_acp/
+```
+
+Reference documents now live in:
+
+```text
+docs/source/pi05_acp/
+```
+
+## Environment Assumptions
+
+Current validated assumptions:
+
+- ROCm-capable MI300X machine
+- Hugging Face access to `google/paligemma-3b-pt-224`
+- patched OpenPI-style `transformers`
+- dataset video backend forced to `pyav`
+
+Default script assumptions:
+
+- venv path: `./.venvs/pi05-openpi-ssp/bin`
+- dataset root override:
+  - `LEROBOT_DATASET_ROOT`
+- venv override:
+  - `EVORL_VENV_BIN`
+
+## Script Entry Points
+
+- `scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_pilot.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_stage1.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_stage2.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_stage3.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh`
+
+Full rerun:
+
+```bash
+bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
+```
+
+## Validation
+
+Key test command:
+
+```bash
+pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
+```
+
+Latest validated result on this machine:
+
+```text
+4 passed, 1 warning
+```
+
+## Reference Material
+
+- [Runbook](./pi05_acp/runbook)
+- [Execution Plan](./pi05_acp/execution_plan)
+- [Experiment Report](./pi05_acp/experiment_report)

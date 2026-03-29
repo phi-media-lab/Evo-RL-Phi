@@ -73,6 +73,26 @@
 
 **LeRobot-aligned foundation:** we use LeRobot as the base of this codebase because its inference and data-collection logic are highly aligned with real-world RL workflows.
 
+### MI300X / PI05 ACP
+
+For the ROCm + MI300X + `pi05` ACP workflow, use this repository as the single entrypoint.
+
+- Docs: `docs/source/pi05_acp_mi300x.mdx`
+- Cloud quick start: `docs/source/pi05_acp_runpod_quickstart.mdx`
+- Scripts: `scripts/experiments/pi05_acp/`
+- Setup: `scripts/setup/setup_rocm_pi05.sh`
+- Key validation:
+
+```bash
+pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
+```
+
+Full rerun:
+
+```bash
+bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
+```
+
 <a id="installation"></a>
 
 ### 1) Installation
