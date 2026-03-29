@@ -81,6 +81,7 @@ For the ROCm + MI300X + `pi05` ACP workflow, use this repository as the single e
 - Cloud quick start: `docs/source/pi05_acp_runpod_quickstart.mdx`
 - Scripts: `scripts/experiments/pi05_acp/`
 - Setup: `scripts/setup/setup_rocm_pi05.sh`
+- Bootstrap: `scripts/setup/bootstrap_runpod_mi300x.sh`
 - Key validation:
 
 ```bash
@@ -91,6 +92,12 @@ Full rerun:
 
 ```bash
 bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
+```
+
+Fresh MI300X cloud instance bootstrap:
+
+```bash
+bash scripts/setup/bootstrap_runpod_mi300x.sh
 ```
 
 <a id="installation"></a>
