@@ -71,6 +71,31 @@ def get_safe_dtype(target_dtype, device_type):
     return target_dtype
 
 
+def apply_norm_with_optional_cond(norm_layer, hidden_states, cond):
+    """Support both patched OpenPI norms and vanilla HF Gemma norms."""
+    try:
+        output = norm_layer(hidden_states, cond=cond)
+    except TypeError:
+        output = norm_layer(hidden_states)
+
+    if isinstance(output, tuple):
+        return output
+    return output, None
+
+
+def gated_residual(x, y, gate):
+    """Fallback for environments where transformers lacks `_gated_residual`."""
+    if hasattr(modeling_gemma, "_gated_residual"):
+        return modeling_gemma._gated_residual(x, y, gate)  # noqa: SLF001
+    if x is None and y is None:
+        return None
+    if x is None or y is None:
+        return x if x is not None else y
+    if gate is None:
+        return x + y
+    return x + y * gate
+
+
 def create_sinusoidal_pos_embedding(  # see openpi `create_sinusoidal_pos_embedding` (exact copy)
     time: torch.Tensor, dimension: int, min_period: float, max_period: float, device="cpu"
 ) -> Tensor:
@@ -226,7 +251,9 @@ def compute_layer_complete(
     gates = []
     for i, hidden_states in enumerate(inputs_embeds):
         layer = models[i].layers[layer_idx]
-        hidden_states, gate = layer.input_layernorm(hidden_states, cond=adarms_cond[i])  # noqa: PLW2901
+        hidden_states, gate = apply_norm_with_optional_cond(
+            layer.input_layernorm, hidden_states, adarms_cond[i]
+        )  # noqa: PLW2901
         gates.append(gate)
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, layer.self_attn.head_dim)
@@ -275,15 +302,15 @@ def compute_layer_complete(
             att_output = att_output.to(layer.self_attn.o_proj.weight.dtype)
         out_emb = layer.self_attn.o_proj(att_output[:, start_pos:end_pos])
         # first residual
-        out_emb = modeling_gemma._gated_residual(hidden_states, out_emb, gates[i])  # noqa: SLF001
+        out_emb = gated_residual(hidden_states, out_emb, gates[i])
         after_first_residual = out_emb.clone()
-        out_emb, gate = layer.post_attention_layernorm(out_emb, cond=adarms_cond[i])
+        out_emb, gate = apply_norm_with_optional_cond(layer.post_attention_layernorm, out_emb, adarms_cond[i])
         # Convert to bfloat16 if the next layer (mlp) uses bfloat16
         if layer.mlp.up_proj.weight.dtype == torch.bfloat16:
             out_emb = out_emb.to(dtype=torch.bfloat16)
         out_emb = layer.mlp(out_emb)
         # second residual
-        out_emb = modeling_gemma._gated_residual(after_first_residual, out_emb, gate)  # noqa: SLF001
+        out_emb = gated_residual(after_first_residual, out_emb, gate)
         outputs_embeds.append(out_emb)
         start_pos = end_pos
     return outputs_embeds
@@ -508,7 +535,7 @@ class PaliGemmaWithExpertModel(
             def compute_final_norms(inputs_embeds, adarms_cond):
                 outputs_embeds = []
                 for i, hidden_states in enumerate(inputs_embeds):
-                    out_emb, _ = models[i].norm(hidden_states, cond=adarms_cond[i])
+                    out_emb, _ = apply_norm_with_optional_cond(models[i].norm, hidden_states, adarms_cond[i])
                     outputs_embeds.append(out_emb)
                 return outputs_embeds
 
@@ -815,14 +842,6 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
         prefix_att_2d_masks_4d = self._prepare_attention_masks_4d(prefix_att_2d_masks)
         self.paligemma_with_expert.paligemma.language_model.config._attn_implementation = "eager"  # noqa: SLF001
 
-        _, past_key_values = self.paligemma_with_expert.forward(
-            attention_mask=prefix_att_2d_masks_4d,
-            position_ids=prefix_position_ids,
-            past_key_values=None,
-            inputs_embeds=[prefix_embs, None],
-            use_cache=True,
-        )
-
         dt = -1.0 / num_steps
 
         x_t = noise
@@ -832,8 +851,9 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
 
             def denoise_step_partial_call(input_x_t, current_timestep=time_tensor):
                 return self.denoise_step(
+                    prefix_embs=prefix_embs,
                     prefix_pad_masks=prefix_pad_masks,
-                    past_key_values=past_key_values,
+                    prefix_att_masks=prefix_att_masks,
                     x_t=input_x_t,
                     timestep=current_timestep,
                 )
@@ -863,33 +883,34 @@ class PI05Pytorch(nn.Module):  # see openpi `PI0Pytorch`
 
     def denoise_step(
         self,
+        prefix_embs,
         prefix_pad_masks,
-        past_key_values,
+        prefix_att_masks,
         x_t,
         timestep,
     ):
         """Apply one denoising step of the noise `x_t` at a given timestep."""
         suffix_embs, suffix_pad_masks, suffix_att_masks, adarms_cond = self.embed_suffix(x_t, timestep)
+        if (
+            self.paligemma_with_expert.paligemma.language_model.layers[0].self_attn.q_proj.weight.dtype
+            == torch.bfloat16
+        ):
+            suffix_embs = suffix_embs.to(dtype=torch.bfloat16)
+            prefix_embs = prefix_embs.to(dtype=torch.bfloat16)
 
-        suffix_len = suffix_pad_masks.shape[1]
-        batch_size = prefix_pad_masks.shape[0]
-        prefix_len = prefix_pad_masks.shape[1]
-
-        prefix_pad_2d_masks = prefix_pad_masks[:, None, :].expand(batch_size, suffix_len, prefix_len)
-        suffix_att_2d_masks = make_att_2d_masks(suffix_pad_masks, suffix_att_masks)
-        full_att_2d_masks = torch.cat([prefix_pad_2d_masks, suffix_att_2d_masks], dim=2)
-
-        prefix_offsets = torch.sum(prefix_pad_masks, dim=-1)[:, None]
-        position_ids = prefix_offsets + torch.cumsum(suffix_pad_masks, dim=1) - 1
+        pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
+        att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
+        full_att_2d_masks = make_att_2d_masks(pad_masks, att_masks)
+        position_ids = torch.cumsum(pad_masks, dim=1) - 1
 
         full_att_2d_masks_4d = self._prepare_attention_masks_4d(full_att_2d_masks)
-        self.paligemma_with_expert.gemma_expert.model.config._attn_implementation = "eager"  # noqa: SLF001
+        self.paligemma_with_expert.paligemma.language_model.config._attn_implementation = "eager"  # noqa: SLF001
 
         outputs_embeds, _ = self.paligemma_with_expert.forward(
             attention_mask=full_att_2d_masks_4d,
             position_ids=position_ids,
-            past_key_values=past_key_values,
-            inputs_embeds=[None, suffix_embs],
+            past_key_values=None,
+            inputs_embeds=[prefix_embs, suffix_embs],
             use_cache=False,
             adarms_cond=[None, adarms_cond],
         )
