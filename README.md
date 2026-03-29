@@ -1,23 +1,11 @@
 <h1 align="center">Evo-RL</h1>
 
 <p align="center">
-  <a href="https://MINT-SJTU.github.io/Evo-RL/"><img alt="project website" src="https://img.shields.io/badge/Project-Website-0ea5e9"/></a>
   <a href="https://github.com/huggingface/lerobot"><img alt="lerobot version" src="https://img.shields.io/badge/LeRobot-0.4.4-f59e0b"/></a>
-  <a href="https://evorl.example.com/wechat-post"><img alt="wechat post" src="https://img.shields.io/badge/WeChat-Official%20Post-07c160"/></a>
-  <a href="#community-channels"><img alt="wechat group join us" src="https://img.shields.io/badge/WeChat%20Group-Join%20Us-a855f7?logo=wechat&logoColor=white"/></a>
-  <a href="#citation"><img alt="paper coming soon" src="https://img.shields.io/static/v1?label=Paper&message=Coming%20Soon&color=9ca3af"/></a>
-  <a href="#model--dataset"><img alt="hugging face model coming soon" src="https://img.shields.io/static/v1?label=%F0%9F%A4%97%20Model&message=Coming%20Soon&color=9ca3af"/></a>
-  <a href="#model--dataset"><img alt="hugging face dataset coming soon" src="https://img.shields.io/static/v1?label=%F0%9F%A4%97%20Dataset&message=Coming%20Soon&color=9ca3af"/></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/License-Apache--2.0-ef4444"/></a>
 </p>
 
-<p align="center"><strong>SJTU &amp; Evo-Tech</strong></p>
-
 <p align="center"><strong>Real-world RL workflows on top of LeRobot, with a validated ROCm + MI300X + pi05 ACP path.</strong></p>
-
-<p align="center">
-  <img alt="Evo-RL Pipeline Overview" src="./website/assets/images/overview.png" width="96%"/>
-</p>
 
 ## What This Repo Is
 
@@ -32,7 +20,7 @@ This branch is organized so a new MI300X cloud machine can start from this repos
 
 ## What Is Validated On This Branch
 
-The `codex/pi05-rocm-acp` branch has already been validated for the ROCm + `pi05` ACP workflow on MI300X-class hardware:
+The `pi05-rocm-acp` branch has already been validated for the ROCm + `pi05` ACP workflow on MI300X-class hardware:
 
 - fresh clone of this repo
 - bootstrap of a local `.venvs/pi05-openpi-ssp`
@@ -99,12 +87,6 @@ bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
 - `src/lerobot/`
   - core training, policy, value, robot, and environment code
 
-## Current Focus
-
-- **Single-repo deployment**: use this repository as the only required entrypoint for MI300X deployment and validation.
-- **Real-world RL on open hardware**: support reproducible robot-learning workflows on SO101 and AgileX platforms.
-- **Runnable policy/value stacks**: keep policy training, value training, ACP tagging, and rollout collection in one CLI-oriented codebase.
-
 ## Table of Contents
 
 | Getting Started | Training Pipeline | Project Info |
@@ -113,34 +95,6 @@ bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
 | [1) Installation](#installation) | [5) Value Inference](#value-inference) | [Community Channels](#community-channels) |
 | [2) Hardware Setup](#hardware-setup) | [6) Policy Training](#policy-training) | [Affiliations](#affiliations) |
 | [3) Data Collection](#data-collection) | [7) Closed-loop Rollout and Next Round](#closed-loop-rollout-and-next-round) | [Citation](#citation) / [License](#license) |
-
-<p align="center"><strong>Value Visual Results</strong></p>
-
-<p align="center"><small><strong>Success Case</strong></small></p>
-
-<p align="center">
-  <img alt="Value Overlay Success Episode 0405" src="./website/assets/gifs/value_success.gif" width="96%"/>
-</p>
-
-<p align="center"><small><strong>Failure Case</strong></small></p>
-
-<p align="center">
-  <img alt="Value Overlay Failure Episode 0697" src="./website/assets/gifs/value_failure.gif" width="96%"/>
-</p>
-
-<p align="center"><strong>Policy Rollout Visual Results</strong></p>
-
-<p align="center">
-  <img alt="Policy Rollout Result 1" src="./website/assets/gifs/policy_rollout_1.gif" width="48%"/>
-  <img alt="Policy Rollout Result 2" src="./website/assets/gifs/policy_rollout_2.gif" width="48%"/>
-</p>
-
-<p align="center"><strong>Human-in-the-Loop Visual Results</strong></p>
-
-<p align="center">
-  <img alt="Human-in-the-Loop Result 1" src="./website/assets/gifs/hitl_1.gif" width="48%"/>
-  <img alt="Human-in-the-Loop Result 2" src="./website/assets/gifs/hitl_2.gif" width="48%"/>
-</p>
 
 <a id="quick-start"></a>
 
