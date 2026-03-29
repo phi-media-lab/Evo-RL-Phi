@@ -13,30 +13,105 @@
 
 <p align="center"><strong>SJTU &amp; Evo-Tech</strong></p>
 
-<p align="center"><strong>Architecture Overview</strong></p>
+<p align="center"><strong>Real-world RL workflows on top of LeRobot, with a validated ROCm + MI300X + pi05 ACP path.</strong></p>
 
 <p align="center">
   <img alt="Evo-RL Pipeline Overview" src="./website/assets/images/overview.png" width="96%"/>
 </p>
 
-## 🎯 Evo-RL Focus
+## What This Repo Is
 
-- **Open real-world RL on two platforms**: we build and release full real-world RL pipelines on SO101 and AgileX (PiPER/PiPER-X).
-- **Open code, models, and datasets for reproducibility**: we continuously release runnable offline RL assets so more people can reproduce results and apply them to real-world tasks.
-- **Open algorithm and community co-evolution**: we reproduce existing real-world RL methods, propose new methods, and keep publishing data/benchmarks to grow a collaborative open-source community.
+`Evo-RL` is a LeRobot-based codebase for real-world robot learning. The repository currently focuses on:
 
-## 🚀 News
+- offline RL and iterative improvement workflows for real robots
+- SO101 and AgileX PiPER / PiPER-X hardware support
+- value training, value inference, ACP-tagged policy training, and rollout collection
+- a single-repo ROCm deployment path for `pi05` on MI300X
 
-- **[2026-03-07]** Added AgileX (PiPER/PiPER-X) support for real-world RL.
-- **[2026-02-26]** First SO101 real-world RL baseline and reproducible CLI workflow are released.
+This branch is organized so a new MI300X cloud machine can start from this repository alone, instead of depending on an external hackathon repo or local path conventions.
 
-## 🧭 Table of Contents
+## What Is Validated On This Branch
 
-| Getting Started                        | Training Pipeline                                                            | Project Info                                |
-| -------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
-| [⚡ Quick Start](#quick-start)         | [4) Value Function Training](#value-function-training)                       | [Model & Dataset](#model--dataset)          |
-| [1) Installation](#installation)       | [5) Value Inference](#value-inference)                                       | [Community Channels](#community-channels)   |
-| [2) Hardware Setup](#hardware-setup)   | [6) Policy Training](#policy-training)                                       | [Affiliations](#affiliations)               |
+The `codex/pi05-rocm-acp` branch has already been validated for the ROCm + `pi05` ACP workflow on MI300X-class hardware:
+
+- fresh clone of this repo
+- bootstrap of a local `.venvs/pi05-openpi-ssp`
+- OpenPI-patched `transformers==4.53.2`
+- `pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py`
+- `pi05` ACP smoke workflow:
+  - `value train`
+  - `value infer`
+  - `policy train`
+- staged reruns up to `stage3` / `500` training steps
+
+Operational constraints for the validated path:
+
+- ROCm-capable MI300X machine
+- Hugging Face access to `google/paligemma-3b-pt-224`
+- `pyav` as the video backend
+- dataset-compatible cache or first-download access
+
+## Start Here
+
+Choose one path.
+
+| Goal | Entry |
+| --- | --- |
+| Bring up a fresh cloud MI300X instance | [`scripts/setup/bootstrap_runpod_mi300x.sh`](./scripts/setup/bootstrap_runpod_mi300x.sh) |
+| Install into an existing ROCm machine | [`scripts/setup/setup_rocm_pi05.sh`](./scripts/setup/setup_rocm_pi05.sh) |
+| Read the MI300X workflow overview | [`docs/source/pi05_acp_mi300x.mdx`](./docs/source/pi05_acp_mi300x.mdx) |
+| Follow the shortest cloud setup path | [`docs/source/pi05_acp_runpod_quickstart.mdx`](./docs/source/pi05_acp_runpod_quickstart.mdx) |
+| Run the minimal end-to-end check | [`scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh`](./scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh) |
+| Re-run the full staged validation | [`scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh`](./scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh) |
+
+## Fastest Path
+
+Fresh MI300X cloud instance:
+
+```bash
+git clone https://github.com/phi-media-lab/Evo-RL-Phi.git
+cd Evo-RL-Phi
+bash scripts/setup/bootstrap_runpod_mi300x.sh
+source .venvs/pi05-openpi-ssp/bin/activate
+hf auth login
+pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
+bash scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh
+```
+
+If you want the staged workflow after smoke:
+
+```bash
+bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
+```
+
+## Repo Map
+
+- `scripts/setup/`
+  - ROCm environment bootstrap and OpenPI patching
+- `scripts/experiments/pi05_acp/`
+  - smoke, pilot, stage1, stage2, stage3, and full rerun scripts
+- `docs/source/pi05_acp_mi300x.mdx`
+  - single-repo workflow overview
+- `docs/source/pi05_acp_runpod_quickstart.mdx`
+  - shortest cloud setup path
+- `docs/source/pi05_acp/`
+  - execution plan, runbook, experiment report
+- `src/lerobot/`
+  - core training, policy, value, robot, and environment code
+
+## Current Focus
+
+- **Single-repo deployment**: use this repository as the only required entrypoint for MI300X deployment and validation.
+- **Real-world RL on open hardware**: support reproducible robot-learning workflows on SO101 and AgileX platforms.
+- **Runnable policy/value stacks**: keep policy training, value training, ACP tagging, and rollout collection in one CLI-oriented codebase.
+
+## Table of Contents
+
+| Getting Started | Training Pipeline | Project Info |
+| --- | --- | --- |
+| [Quick Start](#quick-start) | [4) Value Function Training](#value-function-training) | [Model & Dataset](#model--dataset) |
+| [1) Installation](#installation) | [5) Value Inference](#value-inference) | [Community Channels](#community-channels) |
+| [2) Hardware Setup](#hardware-setup) | [6) Policy Training](#policy-training) | [Affiliations](#affiliations) |
 | [3) Data Collection](#data-collection) | [7) Closed-loop Rollout and Next Round](#closed-loop-rollout-and-next-round) | [Citation](#citation) / [License](#license) |
 
 <p align="center"><strong>Value Visual Results</strong></p>
@@ -71,30 +146,39 @@
 
 ## ⚡ Quick Start
 
-**LeRobot-aligned foundation:** we use LeRobot as the base of this codebase because its inference and data-collection logic are highly aligned with real-world RL workflows.
+This repository is built on top of LeRobot and extends it for real-world RL workflows.
 
-### MI300X / PI05 ACP
+### MI300X / `pi05` ACP
 
-For the ROCm + MI300X + `pi05` ACP workflow, use this repository as the single entrypoint.
+For the ROCm + MI300X + `pi05` ACP workflow, this repository is the only required entrypoint.
 
-- Docs: `docs/source/pi05_acp_mi300x.mdx`
-- Cloud quick start: `docs/source/pi05_acp_runpod_quickstart.mdx`
-- Scripts: `scripts/experiments/pi05_acp/`
-- Setup: `scripts/setup/setup_rocm_pi05.sh`
-- Bootstrap: `scripts/setup/bootstrap_runpod_mi300x.sh`
-- Key validation:
+Primary docs and scripts:
+
+- `docs/source/pi05_acp_mi300x.mdx`
+- `docs/source/pi05_acp_runpod_quickstart.mdx`
+- `scripts/setup/bootstrap_runpod_mi300x.sh`
+- `scripts/setup/setup_rocm_pi05.sh`
+- `scripts/experiments/pi05_acp/`
+
+Validation command:
 
 ```bash
 pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
 ```
 
-Full rerun:
+Minimal end-to-end run:
+
+```bash
+bash scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh
+```
+
+Full staged rerun:
 
 ```bash
 bash scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh rerun_YYYYMMDD
 ```
 
-Fresh MI300X cloud instance bootstrap:
+Fresh MI300X cloud bootstrap:
 
 ```bash
 bash scripts/setup/bootstrap_runpod_mi300x.sh
@@ -104,9 +188,19 @@ bash scripts/setup/bootstrap_runpod_mi300x.sh
 
 ### 1) Installation
 
+For the validated MI300X path, prefer the repository-managed scripts instead of manual setup:
+
 ```bash
-git clone https://github.com/MINT-SJTU/Evo-RL.git
-cd Evo-RL
+git clone https://github.com/phi-media-lab/Evo-RL-Phi.git
+cd Evo-RL-Phi
+bash scripts/setup/bootstrap_runpod_mi300x.sh
+```
+
+For a generic development install:
+
+```bash
+git clone https://github.com/phi-media-lab/Evo-RL-Phi.git
+cd Evo-RL-Phi
 conda create -y -n evo-rl python=3.10
 conda activate evo-rl
 pip install -e .
@@ -584,7 +678,7 @@ Iterative training loop (abstract):
 
 - WeChat official post: [Coming Soon](https://evorl.example.com/wechat-post)
 - Documentation: [`docs/README.md`](./docs/README.md)
-- GitHub Issues: [Create an issue](https://github.com/MINT-SJTU/Evo-RL/issues)
+- GitHub Issues: [Create an issue](https://github.com/phi-media-lab/Evo-RL-Phi/issues)
 - Email: business@evomind-tech.com
 - WeChat group QR code:
 
@@ -606,7 +700,7 @@ Iterative training loop (abstract):
   title        = {Evo-RL: Towards Iterative Policy Improvement in Real-World Offline RL},
   author       = {Evo-RL Contributors},
   year         = {2026},
-  howpublished = {\url{https://github.com/MINT-SJTU/Evo-RL}}
+  howpublished = {\url{https://github.com/phi-media-lab/Evo-RL-Phi}}
 }
 ```
 
@@ -616,4 +710,4 @@ Apache-2.0. See [LICENSE](./LICENSE).
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/image?repos=MINT-SJTU/Evo-RL&type=date&legend=top-left)](https://www.star-history.com/?repos=MINT-SJTU%2FEvo-RL&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/image?repos=phi-media-lab/Evo-RL-Phi&type=date&legend=top-left)](https://www.star-history.com/?repos=phi-media-lab%2FEvo-RL-Phi&type=date&legend=top-left)

@@ -2,7 +2,7 @@
 
 ## 1. 实验目标
 
-本实验的目标是基于 `~/phi-media-lab/AMD_Hackathon` 中的 AMD ROCm 配置思路，在当前机器上完成以下验证：
+本实验的目标是基于前期 AMD ROCm 配置经验，在当前机器上完成以下验证：
 
 1. 配置并验证 ROCm 后端的 LeRobot / Evo-RL 运行环境
 2. 跑通 `pi05` 的真实推理
@@ -21,9 +21,8 @@
 
 ### 2.2 代码库
 
-- 文档仓: `/root/phi-media-lab/AMD_Hackathon`
-- 主代码仓: `/root/phi-media-lab/Evo-RL-Phi`
-- OpenPI 源码: `/root/phi-media-lab/openpi`
+- 主代码仓: `Evo-RL-Phi`
+- OpenPI 源码: `openpi`
 
 ### 2.3 使用的 Python 环境
 
@@ -141,15 +140,15 @@
 
 ### 4.1 `pi05` 相关
 
-[configuration_pi05.py](/root/phi-media-lab/Evo-RL-Phi/src/lerobot/policies/pi05/configuration_pi05.py)
+[`src/lerobot/policies/pi05/configuration_pi05.py`](../../../../src/lerobot/policies/pi05/configuration_pi05.py)
 
 - 新增 `tokenizer_name`
 
-[processor_pi05.py](/root/phi-media-lab/Evo-RL-Phi/src/lerobot/policies/pi05/processor_pi05.py)
+[`src/lerobot/policies/pi05/processor_pi05.py`](../../../../src/lerobot/policies/pi05/processor_pi05.py)
 
 - 从硬编码 tokenizer 切换到 `config.tokenizer_name`
 
-[modeling_pi05.py](/root/phi-media-lab/Evo-RL-Phi/src/lerobot/policies/pi05/modeling_pi05.py)
+[`src/lerobot/policies/pi05/modeling_pi05.py`](../../../../src/lerobot/policies/pi05/modeling_pi05.py)
 
 - 放宽 `siglip.check` 的依赖
 - 增加 tied-weight fallback，兼容 `lerobot/pi05_base` 权重结构
@@ -158,11 +157,11 @@
 
 ### 4.2 value inference 相关
 
-[value.py](/root/phi-media-lab/Evo-RL-Phi/src/lerobot/configs/value.py)
+[`src/lerobot/configs/value.py`](../../../../src/lerobot/configs/value.py)
 
 - 为 `ValueInferenceDatasetConfig` 增加 `video_backend`
 
-[lerobot_value_infer.py](/root/phi-media-lab/Evo-RL-Phi/src/lerobot/scripts/lerobot_value_infer.py)
+[`src/lerobot/scripts/lerobot_value_infer.py`](../../../../src/lerobot/scripts/lerobot_value_infer.py)
 
 - 将 `dataset.video_backend` 传给 `LeRobotDataset`
 
@@ -231,7 +230,7 @@ lerobot/pi05_base
 
 脚本：
 
-[run_pi05_acp_pilot.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_pilot.sh)
+[`scripts/experiments/pi05_acp/run_pi05_acp_pilot.sh`](../../../../scripts/experiments/pi05_acp/run_pi05_acp_pilot.sh)
 
 配置：
 
@@ -247,14 +246,14 @@ lerobot/pi05_base
 
 输出目录：
 
-- [value pilot](/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_pilot)
-- [policy pilot](/root/phi-media-lab/Evo-RL-Phi/outputs/train/pi05_acp_policy_pilot)
+- `outputs/value_train/pi05_acp_pilot`
+- `outputs/train/pi05_acp_policy_pilot`
 
 ### 6.3 Stage1
 
 脚本：
 
-[run_pi05_acp_stage1.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_stage1.sh)
+[`scripts/experiments/pi05_acp/run_pi05_acp_stage1.sh`](../../../../scripts/experiments/pi05_acp/run_pi05_acp_stage1.sh)
 
 配置：
 
@@ -270,14 +269,14 @@ lerobot/pi05_base
 
 输出目录：
 
-- [value stage1](/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_stage1)
-- [policy stage1](/root/phi-media-lab/Evo-RL-Phi/outputs/train/pi05_acp_policy_stage1)
+- `outputs/value_train/pi05_acp_stage1`
+- `outputs/train/pi05_acp_policy_stage1`
 
 ### 6.4 Stage2
 
 脚本：
 
-[run_pi05_acp_stage2.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_stage2.sh)
+[`scripts/experiments/pi05_acp/run_pi05_acp_stage2.sh`](../../../../scripts/experiments/pi05_acp/run_pi05_acp_stage2.sh)
 
 配置：
 
@@ -293,14 +292,14 @@ lerobot/pi05_base
 
 输出目录：
 
-- [value stage2](/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_stage2)
-- [policy stage2](/root/phi-media-lab/Evo-RL-Phi/outputs/train/pi05_acp_policy_stage2)
+- `outputs/value_train/pi05_acp_stage2`
+- `outputs/train/pi05_acp_policy_stage2`
 
 ### 6.5 Stage3
 
 脚本：
 
-[run_pi05_acp_stage3.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_stage3.sh)
+[`scripts/experiments/pi05_acp/run_pi05_acp_stage3.sh`](../../../../scripts/experiments/pi05_acp/run_pi05_acp_stage3.sh)
 
 配置：
 
@@ -324,8 +323,8 @@ step:400 ... loss:0.245 ...
 
 输出目录：
 
-- [value stage3](/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_stage3)
-- [policy stage3](/root/phi-media-lab/Evo-RL-Phi/outputs/train/pi05_acp_policy_stage3)
+- `outputs/value_train/pi05_acp_stage3`
+- `outputs/train/pi05_acp_policy_stage3`
 
 ### 6.6 全量 Rerun
 
@@ -333,7 +332,7 @@ step:400 ... loss:0.245 ...
 
 脚本：
 
-[run_pi05_acp_full_rerun.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_full_rerun.sh)
+[`scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh`](../../../../scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh)
 
 统一后缀：
 
@@ -362,9 +361,9 @@ rerun_20260329
 
 输出目录：
 
-- [value stage3 rerun](/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_stage3_rerun_20260329)
-- [value infer stage3 rerun](/root/phi-media-lab/Evo-RL-Phi/outputs/value_infer/pi05_acp_stage3_rerun_20260329)
-- [policy stage3 rerun](/root/phi-media-lab/Evo-RL-Phi/outputs/train/pi05_acp_policy_stage3_rerun_20260329)
+- `outputs/value_train/pi05_acp_stage3_rerun_20260329`
+- `outputs/value_infer/pi05_acp_stage3_rerun_20260329`
+- `outputs/train/pi05_acp_policy_stage3_rerun_20260329`
 
 ## 7. 关键观测
 
@@ -381,7 +380,7 @@ rerun_20260329
 补充验证：
 
 ```bash
-cd /root/phi-media-lab/Evo-RL-Phi
+cd <REPO_ROOT>
 pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
 ```
 
@@ -431,17 +430,17 @@ pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi0
 
 ### 8.1 脚本
 
-- [run_pi05_acp_smoke.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_smoke.sh)
-- [run_pi05_acp_pilot.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_pilot.sh)
-- [run_pi05_acp_stage1.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_stage1.sh)
-- [run_pi05_acp_stage2.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_stage2.sh)
-- [run_pi05_acp_stage3.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_stage3.sh)
-- [run_pi05_acp_full_rerun.sh](/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_full_rerun.sh)
+- `scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_pilot.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_stage1.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_stage2.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_stage3.sh`
+- `scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh`
 
 ### 8.2 文档
 
-- [PI05_EVO_RL_ACP_EXECUTION_PLAN.md](/root/phi-media-lab/AMD_Hackathon/PI05_EVO_RL_ACP_EXECUTION_PLAN.md)
-- [PI05_EVO_RL_ACP_RUNBOOK.md](/root/phi-media-lab/AMD_Hackathon/PI05_EVO_RL_ACP_RUNBOOK.md)
+- `docs/source/pi05_acp/execution_plan.md`
+- `docs/source/pi05_acp/runbook.md`
 
 ## 9. 风险与限制
 

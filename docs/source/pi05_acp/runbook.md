@@ -2,7 +2,7 @@
 
 ## Fixed Constraints
 
-- Use the patched environment: `/root/phi-media-lab/.venvs/pi05-openpi-ssp`
+- Use the patched environment: `.venvs/pi05-openpi-ssp`
 - Force dataset decoding with `--dataset.video_backend=pyav`
 - Use local labeled dataset cache for policy training: `/root/.cache/huggingface/lerobot/maxbeau/XLeRobot`
 - Use `MEAN_STD` for `STATE` and `ACTION` unless the dataset is augmented with quantile stats
@@ -12,13 +12,13 @@
 Smoke validation:
 
 ```bash
-bash /root/phi-media-lab/AMD_Hackathon/run_pi05_acp_smoke.sh
+bash scripts/experiments/pi05_acp/run_pi05_acp_smoke.sh
 ```
 
 Short pilot run with checkpoints:
 
 ```bash
-bash /root/phi-media-lab/AMD_Hackathon/run_pi05_acp_pilot.sh
+bash scripts/experiments/pi05_acp/run_pi05_acp_pilot.sh
 ```
 
 ## Pilot Output Paths
@@ -26,13 +26,13 @@ bash /root/phi-media-lab/AMD_Hackathon/run_pi05_acp_pilot.sh
 Value checkpoint:
 
 ```text
-/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_pilot/checkpoints/000005/pretrained_model
+outputs/value_train/pi05_acp_pilot/checkpoints/000005/pretrained_model
 ```
 
 Policy checkpoint:
 
 ```text
-/root/phi-media-lab/Evo-RL-Phi/outputs/train/pi05_acp_policy_pilot/checkpoints/000005/pretrained_model
+outputs/train/pi05_acp_policy_pilot/checkpoints/000005/pretrained_model
 ```
 
 ACP-labeled dataset fields written into local cache:

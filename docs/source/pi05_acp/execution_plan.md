@@ -2,7 +2,7 @@
 
 ## Goal
 
-Reference `AMD_Hackathon` ROCm setup guidance to:
+Reference the ROCm setup guidance that was first validated during the AMD hackathon effort to:
 
 1. validate a ROCm-backed LeRobot runtime,
 2. attempt `pi05` inference on this machine,
@@ -27,7 +27,7 @@ print(torch.cuda.is_available())
 print(torch.cuda.get_device_name(0))
 PY
 
-cd /root/phi-media-lab/Evo-RL-Phi
+cd <REPO_ROOT>
 python3 -m lerobot.scripts.lerobot_info
 python3 -m lerobot.scripts.lerobot_train --help
 python3 -m lerobot.scripts.lerobot_eval --help
@@ -57,7 +57,7 @@ These local changes were made in `Evo-RL-Phi` to unblock validation:
 Editable install refreshed:
 
 ```bash
-cd /root/phi-media-lab/Evo-RL-Phi
+cd <REPO_ROOT>
 python3 -m pip install -e .
 ```
 
@@ -78,7 +78,7 @@ python3 -m pip install -e .
 Commands:
 
 ```bash
-cd /root/phi-media-lab/Evo-RL-Phi
+cd <REPO_ROOT>
 pytest -q tests/training/test_acp_pi05_prompt_pipeline.py -q
 pytest -q tests/training/test_acp_pi05_prompt_pipeline.py tests/policies/pi0_pi05/test_pi05.py
 ```
@@ -93,26 +93,26 @@ Results:
 Isolated environment:
 
 ```bash
-/root/phi-media-lab/.venvs/pi05-openpi-ssp
+<REPO_ROOT>/.venvs/pi05-openpi-ssp
 ```
 
 OpenPI source:
 
 ```bash
-/root/phi-media-lab/openpi
+<REPO_PARENT>/openpi
 ```
 
 Environment preparation that was executed:
 
 ```bash
-python3 -m venv --system-site-packages /root/phi-media-lab/.venvs/pi05-openpi-ssp
-git clone --depth=1 --recurse-submodules https://github.com/Physical-Intelligence/openpi.git /root/phi-media-lab/openpi
-/root/phi-media-lab/.venvs/pi05-openpi-ssp/bin/python -m pip install 'transformers==4.53.2'
-/root/phi-media-lab/.venvs/pi05-openpi-ssp/bin/python -m pip install -e /root/phi-media-lab/Evo-RL-Phi --no-deps
-cp -r /root/phi-media-lab/openpi/src/openpi/models_pytorch/transformers_replace/* \
-  /root/phi-media-lab/.venvs/pi05-openpi-ssp/lib/python3.12/site-packages/transformers/
+python3 -m venv --system-site-packages <REPO_ROOT>/.venvs/pi05-openpi-ssp
+git clone --depth=1 --recurse-submodules https://github.com/Physical-Intelligence/openpi.git <REPO_PARENT>/openpi
+<REPO_ROOT>/.venvs/pi05-openpi-ssp/bin/python -m pip install 'transformers==4.53.2'
+<REPO_ROOT>/.venvs/pi05-openpi-ssp/bin/python -m pip install -e <REPO_ROOT> --no-deps
+cp -r <REPO_PARENT>/openpi/src/openpi/models_pytorch/transformers_replace/* \
+  <REPO_ROOT>/.venvs/pi05-openpi-ssp/lib/python3.12/site-packages/transformers/
 echo '/opt/venv/lib/python3.12/site-packages' > \
-  /root/phi-media-lab/.venvs/pi05-openpi-ssp/lib/python3.12/site-packages/_opt_venv.pth
+  <REPO_ROOT>/.venvs/pi05-openpi-ssp/lib/python3.12/site-packages/_opt_venv.pth
 ```
 
 Patch verification:
@@ -196,13 +196,13 @@ lerobot-value-train \
   --save_checkpoint=true \
   --save_freq=1 \
   --wandb.enable=false \
-  --output_dir=/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_ckpt_meanstd
+  --output_dir=outputs/value_train/pi05_acp_ckpt_meanstd
 
 lerobot-value-infer \
   --dataset.repo_id=maxbeau/XLeRobot \
   --dataset.video_backend=pyav \
   --dataset.default_success=failure \
-  --inference.checkpoint_path=/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_ckpt_meanstd \
+  --inference.checkpoint_path=outputs/value_train/pi05_acp_ckpt_meanstd \
   --runtime.device=cuda \
   --runtime.batch_size=1 \
   --runtime.num_workers=0 \
@@ -275,7 +275,7 @@ rerun_20260329
 Helper script added:
 
 ```text
-/root/phi-media-lab/AMD_Hackathon/run_pi05_acp_full_rerun.sh
+scripts/experiments/pi05_acp/run_pi05_acp_full_rerun.sh
 ```
 
 This rerun executed the entire sequence again:
@@ -300,9 +300,9 @@ Confirmed outcomes:
 Key rerun outputs:
 
 ```text
-/root/phi-media-lab/Evo-RL-Phi/outputs/value_train/pi05_acp_stage3_rerun_20260329
-/root/phi-media-lab/Evo-RL-Phi/outputs/value_infer/pi05_acp_stage3_rerun_20260329
-/root/phi-media-lab/Evo-RL-Phi/outputs/train/pi05_acp_policy_stage3_rerun_20260329
+outputs/value_train/pi05_acp_stage3_rerun_20260329
+outputs/value_infer/pi05_acp_stage3_rerun_20260329
+outputs/train/pi05_acp_policy_stage3_rerun_20260329
 ```
 
 ## Required Next Actions
