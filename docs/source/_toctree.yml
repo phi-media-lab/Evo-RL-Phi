@@ -41,6 +41,10 @@
     title: π₀-FAST (Pi0Fast)
   - local: pi05
     title: π₀.₅ (Pi05)
+  - local: pi05_acp_mi300x
+    title: PI05 ACP on MI300X
+  - local: pi05_acp_runpod_quickstart
+    title: RunPod MI300X Quick Start
   - local: groot
     title: NVIDIA GR00T N1.5
   - local: xvla
