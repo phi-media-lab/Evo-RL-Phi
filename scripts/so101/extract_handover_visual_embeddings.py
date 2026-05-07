@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import av
 import cv2
 import numpy as np
 import pandas as pd
@@ -142,8 +143,14 @@ def _encode_batch(
     return features
 
 
-def _video_fps(cap: cv2.VideoCapture, fallback: float) -> float:
-    fps = float(cap.get(cv2.CAP_PROP_FPS))
+def _stream_fps(stream: Any, fallback: float) -> float:
+    average_rate = getattr(stream, "average_rate", None)
+    if average_rate is None:
+        return fallback
+    try:
+        fps = float(average_rate)
+    except Exception:
+        return fallback
     if fps <= 1e-3 or math.isnan(fps):
         return fallback
     return fps
@@ -177,28 +184,31 @@ def _extract_for_video(
     if not needed:
         return {"video_path": str(video_path), "requested": 0, "filled": 0, "missing": 0}
 
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
+    try:
+        container = av.open(str(video_path))
+    except Exception as exc:
         return {
             "video_path": str(video_path),
             "requested": len(requests),
             "filled": 0,
             "missing": len(requests),
-            "error": "open_failed",
+            "error": f"open_failed:{type(exc).__name__}:{exc}",
         }
+    stream = container.streams.video[0]
+    stream.thread_type = "AUTO"
+    fps = _stream_fps(stream, fallback=30.0)
 
     max_needed = max(needed)
     frames: list[np.ndarray] = []
     row_indices: list[int] = []
     filled = 0
-    current = 0
-    while current <= max_needed:
-        ok, frame = cap.read()
-        if not ok:
+    for current, frame in enumerate(container.decode(stream)):
+        if current > max_needed:
             break
         if current in needed:
+            frame_bgr = frame.to_ndarray(format="bgr24")
             for row_index in by_frame[current]:
-                frames.append(frame.copy())
+                frames.append(frame_bgr.copy())
                 row_indices.append(row_index)
             if len(frames) >= batch_size:
                 encoded = _encode_batch(encoder, frames, image_size=image_size, device=device)
@@ -209,7 +219,6 @@ def _extract_for_video(
                 filled += len(row_indices)
                 frames.clear()
                 row_indices.clear()
-        current += 1
 
     if frames:
         encoded = _encode_batch(encoder, frames, image_size=image_size, device=device)
@@ -219,14 +228,14 @@ def _extract_for_video(
             features_out[row_index, start:end] = encoded[i].astype(np.float16)
         filled += len(row_indices)
 
-    cap.release()
+    container.close()
     return {
         "video_path": str(video_path),
         "requested": len(requests),
         "filled": int(filled),
         "missing": int(len(requests) - filled),
         "max_requested_frame": int(max_needed),
-        "fps": _video_fps(cap, fallback=30.0),
+        "fps": fps,
     }
 
 
