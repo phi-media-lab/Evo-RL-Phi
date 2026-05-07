@@ -109,6 +109,21 @@ def _build_features(df: pd.DataFrame, *, include_action: bool) -> tuple[np.ndarr
     return np.concatenate(feature_blocks, axis=1), feature_names
 
 
+def _load_visual_embeddings(path: Path, *, expected_rows: int) -> tuple[np.ndarray, list[str]]:
+    data = np.load(path)
+    if "embeddings" not in data:
+        raise KeyError(f"Visual embeddings file {path} is missing key 'embeddings'.")
+    embeddings = np.asarray(data["embeddings"], dtype=np.float32)
+    if embeddings.ndim != 2:
+        raise ValueError(f"Visual embeddings must be rank-2, got shape={embeddings.shape}.")
+    if embeddings.shape[0] != expected_rows:
+        raise ValueError(
+            f"Visual embeddings row count mismatch: expected {expected_rows}, got {embeddings.shape[0]}."
+        )
+    names = [f"visual_embedding_{i}" for i in range(embeddings.shape[1])]
+    return embeddings, names
+
+
 def _episode_split(df: pd.DataFrame, val_ratio: float, seed: int) -> tuple[np.ndarray, np.ndarray]:
     episodes = sorted(df["source_episode_uid"].unique().tolist())
     rng = random.Random(seed)
@@ -186,6 +201,7 @@ def main() -> None:
     parser.add_argument("--target-column", default="value_target_segment")
     parser.add_argument("--weight-column", default="value_loss_weight")
     parser.add_argument("--include-action", action="store_true")
+    parser.add_argument("--visual-embeddings", type=Path, default=None)
     parser.add_argument("--hidden-dim", type=int, default=256)
     parser.add_argument("--num-layers", type=int, default=3)
     parser.add_argument("--dropout", type=float, default=0.05)
@@ -211,6 +227,10 @@ def main() -> None:
         raise ValueError("No rows with positive value loss weight.")
 
     features, feature_names = _build_features(df, include_action=args.include_action)
+    if args.visual_embeddings is not None:
+        visual_features, visual_names = _load_visual_embeddings(args.visual_embeddings, expected_rows=len(df))
+        features = np.concatenate([features, visual_features], axis=1)
+        feature_names.extend(visual_names)
     targets = df[args.target_column].to_numpy(dtype=np.float32)
     weights = df[args.weight_column].to_numpy(dtype=np.float32)
 
@@ -303,6 +323,7 @@ def main() -> None:
         "num_layers": args.num_layers,
         "dropout": args.dropout,
         "include_action": args.include_action,
+        "visual_embeddings": str(args.visual_embeddings) if args.visual_embeddings else None,
         "feature_stats": asdict(FeatureStats(mean=mean.tolist(), std=std.tolist(), feature_names=feature_names)),
         "target_column": args.target_column,
         "weight_column": args.weight_column,
