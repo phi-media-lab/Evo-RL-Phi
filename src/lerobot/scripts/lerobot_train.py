@@ -66,6 +66,7 @@ def update_policy(
     lr_scheduler=None,
     lock=None,
     rabc_weights_provider=None,
+    act_awr_weights_provider=None,
 ) -> tuple[MetricsTracker, dict]:
     """
     Performs a single training step to update the policy's weights.
@@ -82,7 +83,8 @@ def update_policy(
         accelerator: The Accelerator instance for distributed training and mixed precision.
         lr_scheduler: An optional learning rate scheduler.
         lock: An optional lock for thread-safe optimizer updates.
-        rabc_weights_provider: Optional RABCWeights instance for sample weighting.
+        rabc_weights_provider: Optional RABCWeights instance for RA-BC sample weighting.
+        act_awr_weights_provider: Optional ACTAWRWeights instance for ACT-AWR sample weighting.
 
     Returns:
         A tuple containing:
@@ -92,27 +94,42 @@ def update_policy(
     start_time = time.perf_counter()
     policy.train()
 
-    # Get RA-BC weights if enabled
-    rabc_batch_weights = None
-    rabc_batch_stats = None
+    if rabc_weights_provider is not None and act_awr_weights_provider is not None:
+        raise ValueError("RA-BC and ACT-AWR sample weighting cannot both be enabled in one training step")
+
+    # Get per-sample weights if enabled
+    sample_weights = None
+    sample_weight_stats = None
+    sample_weight_mode = None
     if rabc_weights_provider is not None:
-        rabc_batch_weights, rabc_batch_stats = rabc_weights_provider.compute_batch_weights(batch)
+        sample_weights, sample_weight_stats = rabc_weights_provider.compute_batch_weights(batch)
+        sample_weight_mode = "rabc"
+    elif act_awr_weights_provider is not None:
+        sample_weights, sample_weight_stats = act_awr_weights_provider.compute_batch_weights(batch)
+        sample_weight_mode = "act_awr"
 
     # Let accelerator handle mixed precision
     with accelerator.autocast():
-        # Use per-sample loss when RA-BC is enabled for proper weighting
-        if rabc_batch_weights is not None:
+        # Use per-sample loss when sample weighting is enabled.
+        if sample_weights is not None:
             # Get per-sample losses
             per_sample_loss, output_dict = policy.forward(batch, reduction="none")
 
-            # Apply RA-BC weights: L_RA-BC = Σ(w_i * l_i) / (Σw_i + ε)
-            # rabc_batch_weights is already normalized to sum to batch_size
+            # Apply weights: L = sum(w_i * l_i) / (sum(w_i) + epsilon).
+            # Providers may normalize weights to sum to batch_size.
             epsilon = 1e-6
-            loss = (per_sample_loss * rabc_batch_weights).sum() / (rabc_batch_weights.sum() + epsilon)
-            # Log raw mean weight (before normalization) - this is the meaningful metric
-            output_dict["rabc_mean_weight"] = rabc_batch_stats["raw_mean_weight"]
-            output_dict["rabc_num_zero_weight"] = rabc_batch_stats["num_zero_weight"]
-            output_dict["rabc_num_full_weight"] = rabc_batch_stats["num_full_weight"]
+            loss = (per_sample_loss * sample_weights).sum() / (sample_weights.sum() + epsilon)
+
+            if sample_weight_mode == "rabc":
+                # Log raw mean weight before batch normalization.
+                output_dict["rabc_mean_weight"] = sample_weight_stats["raw_mean_weight"]
+                output_dict["rabc_num_zero_weight"] = sample_weight_stats["num_zero_weight"]
+                output_dict["rabc_num_full_weight"] = sample_weight_stats["num_full_weight"]
+            elif sample_weight_mode == "act_awr":
+                output_dict["act_awr_mean_weight"] = sample_weight_stats["raw_mean_weight"]
+                output_dict["act_awr_min_weight"] = sample_weight_stats["raw_min_weight"]
+                output_dict["act_awr_max_weight"] = sample_weight_stats["raw_max_weight"]
+                output_dict["act_awr_missing_count"] = sample_weight_stats["missing_count"]
         else:
             loss, output_dict = policy.forward(batch)
 
@@ -347,6 +364,20 @@ def train(
             device=device,
         )
 
+    act_awr_weights = None
+    if getattr(cfg, "use_act_awr", False):
+        from lerobot.utils.act_awr import ACTAWRWeights
+
+        logging.info(f"Loading ACT-AWR targets from {cfg.act_awr_targets_path}")
+        act_awr_weights = ACTAWRWeights(
+            targets_path=cfg.act_awr_targets_path,
+            weight_column=getattr(cfg, "act_awr_weight_column", "act_awr_weight"),
+            missing_weight=getattr(cfg, "act_awr_missing_weight", 1.0),
+            normalize_batch=getattr(cfg, "act_awr_normalize_batch", True),
+            epsilon=getattr(cfg, "act_awr_epsilon", 1e-6),
+            device=device,
+        )
+
     step = 0  # number of policy updates (forward + backward + optim)
 
     if cfg.resume:
@@ -473,6 +504,7 @@ def train(
             accelerator=accelerator,
             lr_scheduler=lr_scheduler,
             rabc_weights_provider=rabc_weights,
+            act_awr_weights_provider=act_awr_weights,
         )
 
         # Note: eval and checkpoint happens *after* the `step`th training update has completed, so we
@@ -497,6 +529,17 @@ def train(
                             "rabc_delta_mean": rabc_stats["delta_mean"],
                             "rabc_delta_std": rabc_stats["delta_std"],
                             "rabc_num_frames": rabc_stats["num_frames"],
+                        }
+                    )
+                if act_awr_weights is not None:
+                    act_awr_stats = act_awr_weights.get_stats()
+                    wandb_log_dict.update(
+                        {
+                            "act_awr_num_frames": act_awr_stats["num_frames"],
+                            "act_awr_weight_min": act_awr_stats["weight_min"],
+                            "act_awr_weight_mean": act_awr_stats["weight_mean"],
+                            "act_awr_weight_max": act_awr_stats["weight_max"],
+                            "act_awr_last_missing_count": act_awr_stats["last_missing_count"],
                         }
                     )
                 wandb_logger.log_dict(wandb_log_dict, step)

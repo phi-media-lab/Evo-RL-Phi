@@ -82,6 +82,15 @@ class TrainPipelineConfig(HubMixin):
     rabc_epsilon: float = 1e-6  # Small constant for numerical stability
     rabc_head_mode: str | None = "sparse"  # For dual-head models: "sparse" or "dense"
 
+    # ACT-AWR/AWAC-style offline RL parameters.
+    use_act_awr: bool = False
+    act_awr_targets_path: str | None = None
+    act_awr_run_id: str | None = None
+    act_awr_weight_column: str = "act_awr_weight"
+    act_awr_missing_weight: float = 1.0
+    act_awr_normalize_batch: bool = True
+    act_awr_epsilon: float = 1e-6
+
     # Rename map for the observation to override the image and state keys
     rename_map: dict[str, str] = field(default_factory=dict)
     checkpoint_path: Path | None = field(init=False, default=None)
@@ -160,6 +169,21 @@ class TrainPipelineConfig(HubMixin):
                 self.rabc_progress_path = str(Path(self.dataset.root) / "sarm_progress.parquet")
             else:
                 self.rabc_progress_path = f"hf://datasets/{repo_id}/sarm_progress.parquet"
+
+        if self.use_rabc and self.use_act_awr:
+            raise ValueError("use_rabc and use_act_awr are mutually exclusive.")
+
+        if self.use_act_awr and not self.act_awr_targets_path:
+            if not self.act_awr_run_id:
+                raise ValueError(
+                    "act_awr_targets_path or act_awr_run_id must be set when use_act_awr=true."
+                )
+            repo_id = self.dataset.repo_id
+            sidecar_path = f"makermods_hil/{self.act_awr_run_id}/act_awr_targets_v0.parquet"
+            if self.dataset.root:
+                self.act_awr_targets_path = str(Path(self.dataset.root) / sidecar_path)
+            else:
+                self.act_awr_targets_path = f"hf://datasets/{repo_id}/{sidecar_path}"
 
     @classmethod
     def __get_path_fields__(cls) -> list[str]:
